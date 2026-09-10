@@ -1,0 +1,3641 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>指数データパーサー</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #F4F5F7;
+    --panel: #FFFFFF;
+    --panel-2: #EBEDF1;
+    --line: #D6DAE1;
+    --text: #16181D;
+    --text-dim: #4B5361;
+    --text-faint: #6B7280;
+    --accent: #0E7C66;
+    --accent-text: #FFFFFF;
+    --warn: #92400E;
+    --warn-bg: #FDF1DC;
+    --danger: #9F2A22;
+    --danger-bg: #FBE7E5;
+    --pace-h: #B3261E;
+    --pace-m: #92600A;
+    --pace-s: #1D4ED8;
+    --row-alt: #F7F8FA;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 100%; padding: 16px; background: var(--bg); }
+  h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 2px;
+    color: var(--text);
+  }
+  .sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 10px;
+    resize: vertical;
+  }
+  textarea::placeholder { color: var(--text-faint); }
+  textarea:focus { outline: 2px solid var(--accent); }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 13px;
+    color: var(--text-dim);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .meta-bar { display: block; }
+  .meta-bar b { color: var(--text); font-weight: 700; }
+  .meta-line1, .meta-line2 { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .meta-line1 { font-size: 14px; }
+  .meta-line2 { font-size: 13px; margin-top: 3px; color: var(--text-dim); }
+  .race-title { font-weight: 700; font-size: 15px; color: var(--text); }
+  .org-tag {
+    font-size: 10px; font-weight: 700; border-radius: 999px;
+    padding: 2px 8px; margin-left: 6px;
+    border: 1px solid var(--accent); color: var(--accent);
+  }
+  .meta-bar .race-name { color: var(--text); font-weight: 700; font-size: 14px; }
+  .warn-box {
+    border: 1px solid var(--warn);
+    background: var(--warn-bg);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--warn);
+    margin-bottom: 14px;
+  }
+  .warn-box ul { margin: 4px 0 0; padding-left: 18px; }
+  .error-box {
+    border: 1px solid var(--danger);
+    background: var(--danger-bg);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    color: var(--danger);
+    margin-bottom: 14px;
+  }
+  /* ---- カードリスト共通(横スクロールなし・画面幅に収める) ---- */
+  .rank-card-list, .horse-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .rank-card, .horse-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  .mark-badge { font-weight: 700; font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+  .horse-num {
+    color: var(--text-dim); font-weight: 700; font-size: 11px;
+    background: var(--panel-2); border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
+  }
+  .horse-name { font-weight: 700; word-break: break-word; }
+  .rank-card-race .slot-tag { color: var(--text-faint); font-size: 10px; }
+  .rank-card-race .idx { font-weight: 700; font-size: 14px; }
+  .rank-card-race .trackidx { font-size: 11px; color: var(--pace-h); font-weight: 700; }
+  .horse-card-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .horse-card-header select.mark-select { width: 48px; flex-shrink: 0; }
+  .horse-stats { margin-left: auto; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+  .race-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .race-chip {
+    background: var(--panel-2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-width: 0;
+  }
+  .race-chip.venue-match { box-shadow: inset 0 0 0 2px var(--accent); }
+  .race-chip .slot-tag { color: var(--text-faint); font-size: 9px; font-weight: 700; }
+  .race-chip .course { color: var(--text-faint); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .race-chip .idx-row { display: flex; align-items: baseline; gap: 4px; margin-top: 1px; }
+  .race-chip .idx { font-weight: 700; font-size: 14px; color: var(--text); }
+  .race-chip .trackidx { font-size: 10px; color: var(--text-dim); }
+  .race-chip.no-data { color: var(--text-faint); text-align: center; font-size: 12px; }
+  .pace-badge {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 15px;
+    text-align: center;
+    color: #FFFFFF;
+    flex-shrink: 0;
+  }
+  .pace-H { background: var(--pace-h); }
+  .pace-M { background: var(--pace-m); }
+  .pace-S { background: var(--pace-s); }
+  .no-data { color: var(--text-faint); }
+  .col-avg .est { color: var(--warn); font-size: 10px; margin-left: 2px; }
+  .col-ninki { font-weight: 700; color: var(--text); }
+  .col-ninki.top3 { color: var(--accent); }
+  .empty-state {
+    text-align: center;
+    color: var(--text-faint);
+    padding: 40px 16px;
+    font-size: 13px;
+  }
+  select.mark-select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    font-size: 12px;
+    padding: 3px 2px;
+  }
+  .foot-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin: 10px 0 5px;
+  }
+  .section-title:first-of-type { margin-top: 0; }
+  .rank-rule {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0 0 6px;
+  }
+  .rank-rule b { color: var(--text); }
+  /* 枠色: 1白/2黒/3赤/4青/5黄/6緑/7橙/8桃 */
+  .waku-1 { background: #FFFFFF !important; color: #16181D !important; border: 1px solid #9AA1AC; }
+  .waku-2 { background: #1A1A1A !important; color: #FFFFFF !important; }
+  .waku-3 { background: #D42D26 !important; color: #FFFFFF !important; }
+  .waku-4 { background: #1F5FC7 !important; color: #FFFFFF !important; }
+  .waku-5 { background: #F2C230 !important; color: #16181D !important; }
+  .waku-6 { background: #2C9E4B !important; color: #FFFFFF !important; }
+  .waku-7 { background: #F08033 !important; color: #16181D !important; }
+  .waku-8 { background: #F2A0C0 !important; color: #16181D !important; }
+  .mark-num {
+    display: inline-block; text-align: center;
+    border-radius: 5px; padding: 3px 0; font-weight: 700; font-size: 15px;
+  }
+  .horse-num { display: inline-block; text-align: center; min-width: 22px; }
+  .bet-head { font-size: 12px; }
+  .mark-badge { line-height: 1.2; }
+  .bet-chip { min-width: 30px !important; height: 30px !important; }
+  .bet-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 2px 10px 8px;
+    margin-bottom: 12px;
+  }
+  .bet-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid var(--line);
+  }
+  .bet-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+  .bet-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 32px; height: 32px; padding: 0 6px;
+    border-radius: 7px; font-weight: 700; font-size: 15px;
+  }
+  .bet-label {
+    flex-shrink: 0; font-size: 12px; font-weight: 700;
+    border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 999px; padding: 4px 10px;
+  }
+  .grp-list { display: flex; flex-direction: column; gap: 8px; }
+  .grp-line {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 0; font-size: 13px; border-top: 1px solid var(--line);
+  }
+  .grp-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grp-idx { font-weight: 700; font-size: 14px; flex-shrink: 0; }
+  .grp-ninki { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+  .grp-dot { font-size: 10px; flex-shrink: 0; line-height: 1; }
+  .tier-head {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    padding: 10px 2px 4px; border-top: 1px solid var(--line); margin-top: 4px;
+  }
+  .grp-list > .tier-head:first-child { border-top: none; margin-top: 0; padding-top: 2px; }
+  .grp-ninki.is-odds-low  { color: #B3261E; font-weight: 700; }
+  .grp-ninki.is-odds-high { color: #1D4ED8; font-weight: 700; }
+  .grp-match {
+    font-size: 9px; font-weight: 700; color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 0 3px; margin-left: 3px; flex-shrink: 0; white-space: nowrap;
+  }
+  .grp-match .m-label { color: var(--text-faint); margin-right: 1px; }
+  .grp-match .m-dist   { color: #1D4ED8; }
+  .grp-match .m-course { color: #0E7C66; }
+  .grp-match .m-pace   { color: #B3261E; }
+  .grp-match.is-full { border-color: var(--text-dim); background: var(--card); }
+  .grp-line.is-same-dist   { box-shadow: inset 0 0 0 2px #1D4ED8; border-radius: 6px; }
+  .grp-line.is-same-course { box-shadow: inset 0 0 0 2px #0E7C66; border-radius: 6px; }
+  .grp-line.is-same-both   { box-shadow: inset 0 0 0 2px #B3261E; border-radius: 6px; }
+  .race-class {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  }
+  .meta-turn { font-size: 11px; color: var(--text-dim); margin-left: 2px; }
+  .meta-scratch { font-size: 11px; color: var(--text-faint); }
+  .est-pace-H { color: #B3261E; }
+  .est-pace-M { color: #0E7C66; }
+  .est-pace-S { color: #1D4ED8; }
+  .grp-track { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+  .mark-head { margin-top: 0 !important; font-size: 14px; }
+  .lens-chip.is-thin { background: #fdeceb; color: #b3261e; }
+  .uni-diff { font-size: 11px; color: #777; }
+  .uni-diff.thin { color: #b3261e; font-weight: 700; }
+  .uni-diff.clear { color: #1a7f5a; font-weight: 700; }
+  .uni-cell.is-thin-cell { outline: 1px solid #f0c3bf; }
+  .uni-tag { font-size: 10px; padding: 1px 6px; border-radius: 999px; margin-left: 4px; }
+  .uni-tag.add { background: #e7f5ee; color: #1a7f5a; }
+  .uni-tag.risk { background: #fdeceb; color: #b3261e; }
+  .thin-word { color: #b3261e; }
+
+  .grp-line.has-note { border-color: #f0c3bf; background: #fdf6f5; }
+  .hn-row { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .hn-warn { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fdeceb; color: #b3261e; font-weight: 600; }
+  .hn-thin { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fff4e5; color: #92600a; }
+  .hn-course { font-size: 11px; color: #777; padding: 1px 4px; }
+
+  .watch-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+  .watch-head { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+  .watch-head-add { color: #1a7f5a; }
+  .watch-head-risk { color: #b3261e; }
+  .watch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 7px 9px; border-radius: 8px; border: 1px solid #e3e3e3; background: #fff; }
+  .watch-row.is-add { border-color: #bfe3d6; background: #f2faf7; }
+  .watch-row.is-risk { border-color: #f0c3bf; background: #fdf5f4; }
+  .watch-mark { font-weight: 700; width: 1.4em; text-align: center; }
+  .watch-name { font-weight: 600; flex: 1 1 6em; min-width: 6em; }
+  .watch-body { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 100%; }
+  .watch-tag { font-size: 11px; padding: 1px 6px; border-radius: 999px;
+    background: #eef4f1; color: #24614a; }
+  .watch-tag.dim { background: #f2f2f2; color: #777; }
+  .watch-ninki { font-size: 12px; }
+  .mark-list {
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 2px 10px;
+    margin-bottom: 8px;
+  }
+  .mark-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 2px; font-size: 14px; font-weight: 700;
+    border-bottom: 1px solid var(--line);
+  }
+  .mark-row:last-child { border-bottom: none; }
+  .mark-num { min-width: 28px; }
+  .mark-row.is-maru-keep {
+    background: rgba(14, 124, 102, 0.10);
+    box-shadow: inset 3px 0 0 var(--accent);
+    border-radius: 6px;
+  }
+  .mark-row.is-maru-keep .mark-name { color: var(--accent); }
+  .mark-name {
+    font-size: 14px; font-weight: 700; flex: 1 1 auto;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mark-ninki { font-size: 12px; font-weight: 700; color: var(--text-dim); flex-shrink: 0; }
+  .mark-odds { font-size: 12px; font-weight: 400; color: var(--text-dim); flex-shrink: 0; }
+  .mark-badge { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+  /* 印の色。順位が上のものほど濃い色にする */
+  .mk-1 { color: #B3261E; }  /* ◎ */
+  .mk-2 { color: #0E7C66; }  /* ◯ */
+  .mk-3 { color: #1D4ED8; }  /* ▲ */
+  .mk-4 { color: #D92D20; }  /* 🔺 */
+  .mk-5 { color: #92600A; }  /* △ */
+  .mk-6 { color: #7C3AED; }  /* ▽ */
+  .mk-7 { color: #C2410C; }  /* ⭐︎ */
+  .mark-◆ { color: #64748B; }
+  .mark-注 { color: var(--text-dim); font-size: 13px; }
+  /* ---- 統合された指標一覧 ---- */
+  .uni-list { display: flex; flex-direction: column; gap: 6px; }
+  .uni-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; min-width: 0;
+  }
+  .uni-card.has-mark { border-color: var(--accent); }
+  .uni-head { display: flex; align-items: center; gap: 7px; }
+  .uni-name { font-size: 14px; font-weight: 700; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uni-odds { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+  .no-mark { color: var(--text-faint); font-weight: 400; }
+  .uni-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 7px; }
+  .uni-cell {
+    border-radius: 6px; padding: 5px 6px; min-width: 0;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .uni-lbl { font-size: 9px; font-weight: 700; opacity: 0.75; }
+  .uni-rank { font-size: 14px; font-weight: 700; line-height: 1.1; }
+  .uni-val { font-size: 11px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-1 { background: #0E7C66; color: #FFFFFF; }
+  .lv-2 { background: #BFE3D6; color: #0B4A3D; }
+  .lv-3 { background: #E6F2EE; color: #146152; }
+  .lv-none { background: var(--panel-2); color: var(--text-faint); }
+  .fold {
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 8px 10px; margin-top: 12px;
+  }
+  .fold .rank-rule { margin-bottom: 0; }
+  .fold > summary {
+    cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-dim);
+  }
+  .fold > summary::-webkit-details-marker { color: var(--text-faint); }
+  .fold[open] > summary { margin-bottom: 10px; }
+  .rank-card-race .slot-tag { color: var(--text-faint); font-size: 10px; }
+  .rank-card-race .idx { color: var(--text); }
+
+  /* ===== 成績記録 ===== */
+  .rec-panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; margin-top: 18px;
+  }
+  .rec-panel > summary {
+    font-size: 14px; font-weight: 700; cursor: pointer; list-style: none;
+  }
+  .rec-panel > summary::-webkit-details-marker { display: none; }
+  .rec-panel > summary::before { content: "▸ "; color: var(--text-faint); }
+  .rec-panel[open] > summary::before { content: "▾ "; }
+  .rec-sub { font-size: 12px; color: var(--text-faint); margin: 4px 0 10px; }
+  .rec-block { margin-top: 14px; }
+  .rec-block-t {
+    font-size: 12px; font-weight: 700; color: var(--text-dim);
+    border-left: 3px solid var(--accent); padding-left: 7px; margin-bottom: 7px;
+  }
+  .rec-form { display: flex; flex-direction: column; gap: 8px; }
+  .rec-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rec-row label { font-size: 12px; color: var(--text-dim); min-width: 62px; }
+  .rec-form input {
+    font-family: inherit; font-size: 14px; padding: 7px 9px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: var(--text); width: 100%;
+  }
+  .rec-form input.num { width: 62px; text-align: center; }
+  .rec-form input.mid { width: 110px; }
+  .rec-note { font-size: 11px; color: var(--text-faint); }
+  .rec-msg { font-size: 12px; font-weight: 700; color: var(--accent); margin-top: 6px; }
+  .rec-msg.is-err { color: var(--danger); }
+  .stat-t { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .stat-t th, .stat-t td {
+    border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: right;
+  }
+  .stat-t th { color: var(--text-faint); font-weight: 600; font-size: 11px; }
+  .stat-t td:first-child, .stat-t th:first-child { text-align: left; }
+  .stat-t td b { font-weight: 700; }
+  .stat-n { color: var(--text-faint); font-size: 11px; }
+  .stat-thin { color: var(--danger); }
+  .log-row {
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--line); padding: 7px 0; font-size: 12px;
+  }
+  .log-main { flex: 1; min-width: 0; }
+  .log-name { font-weight: 600; }
+  .log-sub { color: var(--text-faint); font-size: 11px; }
+  .log-hit { font-size: 11px; font-weight: 700; }
+  .log-hit.ok { color: var(--accent); }
+  .log-hit.ng { color: var(--text-faint); }
+  .log-del {
+    font-size: 11px; padding: 4px 8px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text-dim);
+  }
+  .rec-empty { font-size: 12px; color: var(--text-faint); padding: 8px 0; }
+
+
+  .lens-use { font-size: 9px; font-weight: 700; color: var(--accent); }
+  .lens-nouse { font-size: 9px; font-weight: 700; color: var(--text-faint); }
+  .lens-base { font-size: 9px; font-weight: 700; color: var(--warn); }
+  .stat-t th:first-child { white-space: nowrap; }
+
+  #recImportBox { min-height: 70px; font-size: 11px; margin-top: 8px; }
+
+  .rec-filter { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rec-filter > div { display: flex; flex-direction: column; gap: 2px; }
+  .rec-filter span { font-size: 10px; color: var(--text-faint); }
+  .rec-sel {
+    font-family: inherit; font-size: 12px; padding: 5px 6px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: var(--text);
+  }
+  .rec-advice { background: var(--panel-2); border-radius: 8px; padding: 10px; }
+  .advice-body { font-size: 13px; line-height: 1.7; margin: 0; }
+  .advice-body b { font-weight: 700; }
+  .lens-win { font-size: 9px; font-weight: 700; color: var(--accent); margin-left: 4px; }
+  .lens-lose { font-size: 9px; font-weight: 700; color: var(--danger); margin-left: 4px; }
+  .rec-row-col { flex-direction: column; align-items: stretch; gap: 4px; }
+  .rec-row-col textarea {
+    min-height: 56px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px;
+    background: var(--panel); color: var(--text);
+  }
+  .log-memo {
+    font-size: 11px; color: var(--text-dim); margin-top: 3px;
+    border-left: 2px solid var(--line); padding-left: 6px;
+  }
+
+  .rec-warn {
+    font-size: 12px; line-height: 1.6; color: var(--warn);
+    background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; margin: 0 0 10px;
+  }
+  .rec-warn b { font-weight: 700; }
+  .rec-count { font-size: 11px; color: var(--text-faint); font-weight: 600; margin-left: 6px; }
+
+  .cond-card {
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 10px; margin-top: 9px; background: var(--panel);
+  }
+  .cond-card.is-thin { opacity: 0.72; }
+  .cond-head { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; }
+  .cond-races { font-size: 11px; font-weight: 600; color: var(--text-faint); }
+  .cond-warn { font-size: 11px; color: var(--warn); margin: 3px 0 5px; }
+  .cond-mark {
+    font-size: 11px; color: var(--text-dim); margin: 4px 0 6px;
+    padding-bottom: 5px; border-bottom: 1px solid var(--line);
+  }
+  .cond-line {
+    display: flex; align-items: baseline; gap: 6px;
+    font-size: 12px; padding: 2px 0;
+  }
+  .cond-line.is-top { font-weight: 700; }
+  .cond-name { flex: 1; min-width: 0; }
+  .cond-rate { font-weight: 700; min-width: 46px; text-align: right; }
+  .cond-n { font-size: 10px; color: var(--text-faint); min-width: 40px; text-align: right; }
+  .cond-win .cond-rate { color: var(--accent); }
+  .cond-lose .cond-rate { color: var(--danger); }
+  .cond-base { color: var(--warn); }
+  .cond-base .cond-rate { color: var(--warn); }
+
+  .rec-warn-inline { font-size: 10px; color: var(--warn); }
+
+  .log-venue {
+    font-family: inherit; font-size: 11px; padding: 4px 6px; width: 92px;
+    border: 1px solid var(--warn); border-radius: 6px;
+    background: var(--panel); color: var(--text);
+  }
+
+  .miss-line {
+    font-size: 11px; padding: 4px 0; border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  }
+  .miss-h { font-weight: 700; font-size: 12px; }
+  .miss-tag { color: var(--text-dim); }
+  .miss-race { color: var(--text-faint); font-size: 10px; }
+  .miss-danger { color: var(--danger); font-weight: 700; font-size: 10px; }
+  .miss-sub {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    margin: 9px 0 4px;
+  }
+
+  .logic-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel-2); border-radius: 8px; padding: 5px 9px; margin-bottom: 8px;
+  }
+  .logic-label { font-size: 11px; font-weight: 700; color: var(--text-dim); }
+
+  .logic-src {
+    margin-left: auto; font-size: 10px; color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .logic-opt { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+
+  .why-row {
+    flex: 1 1 100%; font-size: 10px; color: var(--accent);
+    font-weight: 700; margin-top: 2px;
+  }
+  .grp-line .mark-badge { font-size: 14px; width: 18px; flex-shrink: 0; }
+
+  .fold-sub {
+    margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px;
+  }
+  .fold-sub > summary {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    cursor: pointer; list-style: none;
+  }
+  .fold-sub > summary::-webkit-details-marker { display: none; }
+  .fold-sub > summary::before { content: "▸ "; color: var(--text-faint); }
+  .fold-sub[open] > summary::before { content: "▾ "; }
+  details.cond-card > summary { cursor: pointer; list-style: none; }
+  details.cond-card > summary::-webkit-details-marker { display: none; }
+  details.cond-card > summary::after { content: " ▸"; color: var(--text-faint); font-size: 10px; }
+  details.cond-card[open] > summary::after { content: " ▾"; }
+
+  .save-warn {
+    background: var(--danger-bg); color: var(--danger);
+    border: 1px solid #f0b8b3; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 12px; font-size: 13px; line-height: 1.6;
+  }
+  .save-warn b { font-weight: 800; }
+  .save-warn button {
+    display: block; margin-top: 8px;
+    background: var(--danger); border-color: var(--danger); color: #fff;
+    font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 7px; border: none;
+  }
+  .save-ok {
+    background: #eef7f3; color: var(--accent); border: 1px solid #cfe7de;
+    border-radius: 8px; padding: 7px 12px; margin-bottom: 12px;
+    font-size: 12px; font-weight: 700;
+  }
+  #autoSaveChk { margin-right: 6px; }
+  .rec-row label input[type=checkbox] { vertical-align: middle; }
+  .rec-top:empty { display: none; }
+  .rec-block-top {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; margin-top: 14px;
+  }
+  .rec-block-top .rec-block-t { margin-top: 0; }
+  .stat-t td b { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>指数データパーサー</h1>
+  <p class="sub">出馬表の指数データを貼り付けて「パース」を押してください。</p>
+
+  <div class="panel">
+    <textarea id="rawInput" placeholder="ここに出馬表データを貼り付け"></textarea>
+    <div class="btn-row">
+      <button class="primary" id="parseBtn">パース</button>
+      <button id="clearBtn">クリア</button>
+      <button id="copyJsonBtn" disabled>JSONをコピー</button>
+    </div>
+  </div>
+
+  <div id="saveWarn"></div>
+
+  <div class="rec-top" id="recFormArea"></div>
+
+  <details class="rec-panel" id="recPanel">
+    <summary>印の成績<span class="rec-count" id="recCount"></span></summary>
+    <p class="rec-sub">記録した印が実際に3着内に来ているかを見ます。</p>
+    <div class="rec-msg" id="recStorageMsg"></div>
+    <div class="rec-note" id="recStorageInfo"></div>
+    <div class="btn-row"><button id="recStatsCopyBtn">この集計を文字でコピー</button></div>
+    <div class="rec-msg" id="recStatsCopyMsg"></div>
+    <div id="recStatsArea"></div>
+    <div id="recLogArea"></div>
+    <div class="rec-block">
+      <div class="rec-block-t">バックアップ</div>
+      <p class="rec-warn">記録はこのファイルに紐づいて保存されます。<b>新しいファイルを開くと前の記録は見えません。</b>ファイルを差し替える前に必ず「ファイルに保存」してください。</p>
+      <div class="rec-row">
+        <label><input type="checkbox" id="autoSaveChk"> 記録するたびに自動でファイルに書き出す（レースごとにファイルが増えます）</label>
+      </div>
+      <div class="rec-row"><label>1つの開催場につき</label>
+        <input class="num" id="recLimit" inputmode="numeric" value="500">件まで残す
+      </div>
+      <p class="rec-note">同じレースを同じ印の付け方で二重に記録した場合は、自動で1件にまとめます（印の付け方が違うものは比較のため残します）。上限を超えた分は、その開催場の古い記録から自動で削除されます。0を入れると無制限（そのぶん動作が重くなります）。開催場ごとに数えるので、他の場を追加しても既存の場は減りません。残しておきたい記録は「ファイルに保存」してください。</p>
+      <div class="rec-msg" id="recLimitMsg"></div>
+      <div class="btn-row">
+        <button class="primary" id="recFileSaveBtn">ファイルに保存</button>
+        <button id="recFileLoadBtn">ファイルから読み込む</button>
+        <button id="recDiagBtn">記録がどこにあるか調べる</button>
+      </div>
+      <div class="rec-note" id="recDiagArea"></div>
+      <input type="file" id="recFileInput" accept=".json,application/json" style="display:none">
+      <div class="btn-row">
+        <button id="recExportBtn">文字でコピー</button>
+        <button id="recClearBtn">全記録を削除</button>
+      </div>
+      <textarea id="recImportBox" placeholder="コピーした記録をここに貼り付けて、下のボタンを押してください"></textarea>
+      <div class="btn-row">
+        <button id="recImportBtn">貼り付けた記録を読み込む</button>
+      </div>
+      <div class="rec-msg" id="recBackupMsg"></div>
+    </div>
+  </details>
+
+  <div id="output"></div>
+
+</div>
+
+<script>
+(function () {
+  const rawInput = document.getElementById('rawInput');
+  const parseBtn = document.getElementById('parseBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const copyJsonBtn = document.getElementById('copyJsonBtn');
+  const output = document.getElementById('output');
+
+  let lastResult = null;
+  let currentBaseline = null;
+  let totalHorses = 0;
+  // 'jra'(中央) か 'nar'(地方)。開催場から自動判定する。
+  let currentCircuit = 'nar';
+
+  // 開催場の一覧。レース情報の「中央/地方」表示と、貼り付けから場名を拾うのに使う。
+  const JRA_VENUES = ['東京', '中山', '阪神', '京都', '中京', '新潟', '福島', '小倉', '札幌', '函館'];
+  const NAR_VENUES = ['門別', '盛岡', '水沢', '浦和', '船橋', '大井', '川崎', '金沢', '笠松', '名古屋', '名古', '園田', '姫路', '高知', '佐賀'];
+
+  // ---------- パーサー本体 ----------
+
+  function isDash(tok) { return tok === '-'; }
+  // 予想印の位置。出走取消・除外の馬はここに「取消」「除外」が入る
+  function isMark(tok) { return /^(◎|○|▲|△|✕|×|☆|注|--|取消|除外|中止)$/.test(tok); }
+  function isTrack(tok) { return /(ダ|芝)\d+$/.test(tok); }
+  // 例: "H 53 (-7)" / タイム指数が欠測の "M - (-20)" も受け付ける
+  // 障害レースなどは "S -" のように指数も馬場指数も無い形で入る
+  function isPaceIndex(tok) { return /^[A-Z]\s+(-?\d+|-|－|—)(\s*\(-?\d+\))?$/.test(tok); }
+  function isPlainInt(tok) { return /^\d+$/.test(tok); }
+
+  const RACE_SLOTS = [
+    { key: 'best1y', label: '過去1年最高' },
+    { key: 'r5', label: '5走前' },
+    { key: 'r4', label: '4走前' },
+    { key: 'r3', label: '3走前' },
+    { key: 'r2', label: '2走前' },
+    { key: 'r1', label: '前走' },
+  ];
+
+  // 「大井ダ1200」→ 場名「大井」/距離1200 を分解
+  function extractVenue(course) {
+    const m = course.match(/^(.+?)(ダ|芝)\d+$/);
+    return m ? m[1] : course;
+  }
+  function extractDistance(course) {
+    const m = course.match(/(\d+)$/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  // 馬場指数(トラックインデックス)の比較関数: マイナス幅が大きい方を上に。
+  // 同値の場合: 1) 基準コースと同場が上 2) 基準距離に近い方が上。
+  function compareByTrackIndex(a, b, baseline) {
+    if (a.race.trackIndex !== b.race.trackIndex) return a.race.trackIndex - b.race.trackIndex;
+    const aMatch = baseline.venue && extractVenue(a.race.course) === baseline.venue;
+    const bMatch = baseline.venue && extractVenue(b.race.course) === baseline.venue;
+    if (aMatch !== bMatch) return aMatch ? -1 : 1;
+    if (baseline.distance) {
+      const aDiff = Math.abs(extractDistance(a.race.course) - baseline.distance);
+      const bDiff = Math.abs(extractDistance(b.race.course) - baseline.distance);
+      if (aDiff !== bDiff) return aDiff - bDiff;
+    }
+    return 0;
+  }
+
+  function sortHorseRaces(horse, baseline) {
+    const withData = [];
+    const empties = [];
+    RACE_SLOTS.forEach(slot => {
+      const race = horse.races[slot.key];
+      if (race) withData.push({ slotKey: slot.key, slotLabel: slot.label, race });
+      else empties.push({ slotKey: slot.key, slotLabel: slot.label, race: null });
+    });
+
+    withData.sort((a, b) => compareByTrackIndex(a, b, baseline));
+
+    return [...withData, ...empties];
+  }
+
+  // 2026-09-03: 自動印付与ロジック(◎○▲△✕)は、検証が不十分な段階で実装しては
+  // 差し戻す、を繰り返したため撤去した。過去に試したロジック(馬場指数主導→タイム指数
+  // 主導→指数順位+人気の合成)はいずれも会話内の検証にとどめ、コードには入れていない。
+  // 印は「馬別一覧」の手動プルダウンでのみ設定する。次にコードへ組み込むのは、複数レースの
+  // 会話内検証を経て、明示的な指示があってから。
+
+  // 全馬の走破歴から最頻出の開催場を推定(基準コースの初期値に使う)
+  function detectBaseline(result) {
+    const freq = {};
+    result.horses.forEach(h => {
+      RACE_SLOTS.forEach(slot => {
+        const r = h.races[slot.key];
+        if (r) {
+          const v = extractVenue(r.course);
+          freq[v] = (freq[v] || 0) + 1;
+        }
+      });
+    });
+    let topVenue = '';
+    let topCount = 0;
+    Object.keys(freq).forEach(v => { if (freq[v] > topCount) { topVenue = v; topCount = freq[v]; } });
+    const venueList = Object.keys(freq).sort((a, b) => freq[b] - freq[a]);
+
+    const distance = result.meta && result.meta.distance ? parseInt(result.meta.distance, 10) : null;
+    // 貼り付け先頭に開催場があればそれを使う。無い場合のみ過去走の最頻値で代用する。
+    const venue = (result.meta && result.meta.venue) ? result.meta.venue : topVenue;
+    return { venue, distance, venueList };
+  }
+
+  function parseMeta(text) {
+    const meta = {};
+    const lines = text.split('\n').map(l => l.trim());
+
+    // 開催場: 貼り付けの先頭付近にある場名を採用する(出馬表の過去走から推測しない)。
+    const ALL_VENUES = JRA_VENUES.concat(NAR_VENUES);
+    for (let i = 0; i < Math.min(lines.length, 40); i++) {
+      if (ALL_VENUES.includes(lines[i])) { meta.venue = lines[i]; break; }
+    }
+
+    // 発走時刻・コース・頭数。コース記号は「(左 B)」「(左 外 A)」など括弧の中身をそのまま取る。
+    const timeRe = /^(\d{1,2}:\d{2})\s*(芝|ダ)(\d+)m\s*\(([^)]*)\)\s*(\d+)頭/;
+    let timeIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(timeRe);
+      if (m) {
+        timeIdx = i;
+        meta.postTime = m[1];
+        meta.surface = m[2];
+        meta.distance = m[3];
+        meta.turn = m[4].trim(); // 「左 B」「右 外 A」など原文のまま
+        meta.headCount = m[5];
+        break;
+      }
+    }
+
+    // 天候・馬場。地方は「稍」「重」「不」のように略記されることがある。
+    // 長い表記を先に並べないと「小雨」が「雨」だけ拾われるので順序に注意。
+    const wtM = text.match(/(小雨|小雪|晴|曇|雨|雪)\s*(不良|稍重|良|重|稍|不)/);
+    if (wtM) {
+      meta.weather = wtM[1];
+      const COND = { '稍': '稍重', '不': '不良' };
+      meta.trackCond = COND[wtM[2]] || wtM[2];
+    }
+
+    // レース番号・クラス・レース名は、発走時刻行から上に遡って拾う。
+    // 「◀7R」「9R▶」のような前後レースのナビは無視される(時刻行より前のRのうち直近を採る)。
+    if (timeIdx !== -1) {
+      let rIdx = -1;
+      for (let i = timeIdx - 1; i >= 0; i--) {
+        const rm = lines[i].match(/^(\d+)R$/);
+        if (rm) { rIdx = i; meta.raceNo = rm[1]; break; }
+      }
+      if (rIdx !== -1) {
+        // R行と時刻行の間の行: 先頭がクラス、末尾がレース名(1行だけならクラスのみ)
+        const between = [];
+        for (let i = rIdx + 1; i < timeIdx; i++) {
+          const t = lines[i];
+          if (!t || t === 'WIN5') continue; // WIN5はレース名ではないので飛ばす
+          between.push(t);
+        }
+        if (between.length >= 1) meta.raceClass = between[0];
+        if (between.length >= 2) meta.raceName = between[between.length - 1];
+      }
+    } else {
+      const raceNoM = text.match(/^(\d+)R$/m);
+      if (raceNoM) meta.raceNo = raceNoM[1];
+    }
+    return meta;
+  }
+
+  function parseRaceData(text) {
+    const tokens = text.split(/[\t\n\r]+/).map(s => s.trim()).filter(s => s.length > 0);
+
+    let start = -1;
+    for (let i = 0; i < tokens.length - 2; i++) {
+      if (tokens[i] === '1' && isMark(tokens[i + 1]) &&
+          !isTrack(tokens[i + 2]) && !isPaceIndex(tokens[i + 2]) &&
+          !isDash(tokens[i + 2]) && !isPlainInt(tokens[i + 2])) {
+        start = i;
+        break;
+      }
+    }
+    if (start === -1) {
+      throw new Error('データの開始位置(馬番1)が見つかりませんでした。貼り付けたデータの形式をご確認ください。');
+    }
+
+    const horses = [];
+    const warnings = [];
+    let i = start;
+    let expectedNumber = 1;
+
+    while (i < tokens.length) {
+      if (!isPlainInt(tokens[i])) break;
+
+      const umaNumber = parseInt(tokens[i], 10);
+      i++;
+
+      if (umaNumber !== expectedNumber) {
+        warnings.push(`馬番の連番が想定と異なります(期待値:${expectedNumber} 実際:${umaNumber})`);
+      }
+
+      let mark = '';
+      if (i < tokens.length && isMark(tokens[i])) {
+        mark = tokens[i] === '--' ? '' : tokens[i];
+        i++;
+      }
+
+      if (i >= tokens.length) { warnings.push(`馬番${umaNumber}: 馬名が見つかりません`); break; }
+      const name = tokens[i];
+      i++;
+
+      const races = {};
+      let broke = false;
+      for (const slot of RACE_SLOTS) {
+        if (i >= tokens.length) { warnings.push(`馬番${umaNumber}: ${slot.label}のデータが不足しています`); broke = true; break; }
+
+        if (isDash(tokens[i])) {
+          races[slot.key] = null;
+          i++;
+          continue;
+        }
+
+        const trackTok = tokens[i];
+        i++;
+        let paceTok = '';
+        if (i < tokens.length && isPaceIndex(tokens[i])) {
+          paceTok = tokens[i];
+          i++;
+        } else if (i < tokens.length && /^(-|－|—)$/.test(tokens[i])) {
+          // 海外遠征など、コース名はあるがペース・指数が「-」だけで入るケース。
+          // トークンを消費しないと以降が1つずつずれ、オッズが読めず除外扱いになる。
+          i++;
+        } else {
+          warnings.push(`馬番${umaNumber}: ${slot.label}のペース/指数トークンが想定形式ではありません`);
+        }
+
+        // 障害レースなどは "S -" のように馬場指数の括弧ごと無い形で入る
+        const paceMatch = paceTok.match(/^([A-Z])\s+(-?\d+|-|－|—)(?:\s*\((-?\d+)\))?$/);
+        // タイム指数が「-」(欠測)の場合は null のまま扱う。馬場指数は生かす。
+        const parsedTimeIndex = (paceMatch && /^-?\d+$/.test(paceMatch[2])) ? parseInt(paceMatch[2], 10) : null;
+        const parsedTrackIndex = (paceMatch && paceMatch[3] !== undefined) ? parseInt(paceMatch[3], 10) : null;
+        // 値の大きさによる警告は行わない。実データは +25 や -135 のように広く振れるため、
+        // 範囲で異常判定すると正常なデータを弾いてしまう。数値は元データのまま扱う。
+        races[slot.key] = {
+          course: trackTok,
+          pace: paceMatch ? paceMatch[1] : null,
+          timeIndex: parsedTimeIndex,
+          trackIndex: parsedTrackIndex,
+        };
+      }
+      if (broke) break;
+
+      // 末尾は 5走平均 / オッズ / 人気 の順。ただし空欄だとトークンごと詰められるため、
+      // 「次の馬番 + 予想印」の並びが来たらそこで打ち切る(空欄は欠損として扱う)。
+      const isNextHorseHead = k =>
+        k + 1 < tokens.length &&
+        tokens[k] === String(expectedNumber + 1) &&
+        isMark(tokens[k + 1]);
+      const takeTail = () => {
+        if (i >= tokens.length || isNextHorseHead(i)) return null;
+        const t = tokens[i]; i++;
+        return t;
+      };
+      const avgTok = takeTail();
+      const oddsTok = takeTail();
+      const ninkiTok = takeTail();
+
+      const avgMatch = avgTok ? avgTok.match(/^(\d+)(\*?)$/) : null;
+
+      horses.push({
+        number: umaNumber,
+        mark,
+        name,
+        races,
+        avg5: avgMatch ? parseInt(avgMatch[1], 10) : null,
+        // netkeiba の 5走平均に付く「*」。推定値ではなく、芝/ダートなど
+        // 異なる条件のレースが混ざった平均であることを示す注記(公式ヘルプより)。
+        avg5Estimated: avgMatch ? avgMatch[2] === '*' : false,
+        odds: oddsTok === null ? NaN : parseFloat(oddsTok),
+        ninki: ninkiTok === null ? NaN : parseInt(ninkiTok, 10),
+      });
+
+      expectedNumber++;
+    }
+
+    if (horses.length === 0) {
+      throw new Error('馬データを1件も抽出できませんでした。フォーマットをご確認ください。');
+    }
+
+    // 出走取消・除外はオッズが 0.0、または空欄(NaN)で入ってくる。
+    // オッズが無い馬は馬券が買えないので集計から外し、情報だけ残す
+    // (枠色は元の頭数で決まるため meta.headCount は変更しない)。
+    const isScratched = h => h.odds === 0 || isNaN(h.odds);
+    const scratched = horses.filter(isScratched);
+    const runners = horses.filter(h => !isScratched(h));
+    const meta = parseMeta(text);
+    if (scratched.length) meta.scratched = scratched.map(h => ({ number: h.number, name: h.name }));
+    return { meta, horses: runners, warnings };
+  }
+
+  function detectCircuit(baseline) {
+    if (!baseline || !baseline.venue) return 'nar';
+    return JRA_VENUES.includes(baseline.venue) ? 'jra' : 'nar';
+  }
+
+  // ---------- 描画 ----------
+
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  function renderLogicSwitch() {
+    const info = (markLogic === 'v3' && v3Info)
+      ? `<span class="logic-src">${escapeHtml(v3Info.src)} ${v3Info.races}R</span>` : '';
+    return `<div class="logic-bar">
+      <span class="logic-label">印の付け方</span>
+      <label class="logic-opt"><input type="radio" name="markLogic" value="v3"${markLogic === 'v3' ? ' checked' : ''}>記録から自動</label>
+      <label class="logic-opt"><input type="radio" name="markLogic" value="v2"${markLogic === 'v2' ? ' checked' : ''}>手で書いた並び</label>
+      ${info}
+    </div>`;
+  }
+
+  function renderMeta(meta, baseline, horsesForPace) {
+    if (!meta || Object.keys(meta).length === 0) return '';
+    const venue = baseline && baseline.venue ? baseline.venue : '';
+    const line1 = [];
+    const line2pre = [];
+    if (meta.raceNo) line1.push(`<span class="race-title">${escapeHtml(venue)}${escapeHtml(meta.raceNo)}R</span><span class="org-tag">${JRA_VENUES.includes(venue) ? '中央' : '地方'}</span>`);
+    if (meta.raceClass) line1.push(`<span class="race-class">${escapeHtml(meta.raceClass)}</span>`);
+    if (meta.raceName) line1.push(`<span class="race-name">${escapeHtml(meta.raceName)}</span>`);
+
+    if (meta.postTime) line2pre.push(`<span>発走 <b>${escapeHtml(meta.postTime)}</b></span>`);
+    if (meta.surface && meta.distance) line2pre.push(`<span><b>${escapeHtml(meta.surface)}${escapeHtml(meta.distance)}m</b>${meta.turn ? '<span class="meta-turn">(' + escapeHtml(meta.turn) + ')</span>' : ''}</span>`);
+
+    if (meta.headCount) line2pre.push(`<span><b>${escapeHtml(meta.headCount)}</b>頭</span>`);
+    // 出走各馬の前走ペースの多数決で今回の想定ペースを出す(同数なら H > M > S)
+    if (horsesForPace && horsesForPace.length) {
+      const cnt = { H: 0, M: 0, S: 0 };
+      horsesForPace.forEach(h => {
+        const p = pickSameSurfaceRace(h, meta);
+        if (p && p.pace && cnt[p.pace] !== undefined) cnt[p.pace]++;
+      });
+      const total = cnt.H + cnt.M + cnt.S;
+      if (total > 0) {
+        const top = ['H', 'M', 'S'].reduce((a, b) => (cnt[b] > cnt[a] ? b : a));
+        line2pre.push(`<span>想定ペース <b class="est-pace-${top}">${top}</b></span>`);
+      }
+    }
+    if (meta.scratched && meta.scratched.length) {
+      line2pre.push(`<span class="meta-scratch">除外 ${meta.scratched.map(x => x.number).join('・')}</span>`);
+    }
+    if (meta.weather) line2pre.push(`<span>${escapeHtml(meta.weather)}</span>`);
+    if (meta.trackCond) line2pre.push(`<span>馬場: <b>${escapeHtml(meta.trackCond)}</b></span>`);
+    const line2 = line2pre;
+
+    return `<div class="panel meta-bar">
+      <div class="meta-line1">${line1.join('')}</div>
+      ${line2.length ? `<div class="meta-line2">${line2.join('')}</div>` : ''}
+    </div>`;
+  }
+
+  function renderWarnings(warnings) {
+    if (!warnings || warnings.length === 0) return '';
+    return `<div class="warn-box"><b>⚠ 警告 ${warnings.length}件</b>（該当項目は欠損の可能性があります）
+      <ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  function renderRaceChip(entry, baseline) {
+    const race = entry.race;
+    if (!race) return `<div class="race-chip no-data"><div class="slot-tag">${escapeHtml(entry.slotLabel)}</div>－</div>`;
+    const paceClass = race.pace ? `pace-${race.pace}` : '';
+    const idx = race.timeIndex !== null ? race.timeIndex : '－';
+    const tIdx = race.trackIndex !== null ? (race.trackIndex > 0 ? '+' + race.trackIndex : race.trackIndex) : '';
+    const isVenueMatch = baseline.venue && extractVenue(race.course) === baseline.venue;
+    return `<div class="race-chip ${isVenueMatch ? 'venue-match' : ''}">
+      <div class="slot-tag">${escapeHtml(entry.slotLabel)}</div>
+      <div class="course">${escapeHtml(race.course)}</div>
+      <div class="idx-row">
+        ${race.pace ? `<span class="pace-badge ${paceClass}">${escapeHtml(race.pace)}</span>` : ''}
+        <span class="idx">${idx}</span>
+        <span class="trackidx">(${escapeHtml(String(tIdx))})</span>
+      </div>
+    </div>`;
+  }
+
+  function renderTable(horses, baseline, autoMarks) {
+    const cards = horses.map(h => {
+      const sorted = sortHorseRaces(h, baseline);
+      const chips = sorted.map(entry => renderRaceChip(entry, baseline)).join('');
+      const ninkiClass = h.ninki && h.ninki <= 3 ? 'top3' : '';
+      const effectiveMark = autoMarks[h.number] || h.mark;
+      return `<div class="horse-card">
+        <div class="horse-card-header">
+          <span class="horse-num waku-${wakuOf(h.number, totalHorses)}">${h.number}</span>
+          <select class="mark-select" data-num="${h.number}">
+            ${['', '◎', '○', '▲', '△', '✕', '注', '☆'].map(m => `<option value="${m}" ${effectiveMark === m ? 'selected' : ''}>${m || '－'}</option>`).join('')}
+          </select>
+          <span class="horse-name">${escapeHtml(h.name)}</span>
+          <span class="horse-stats">
+            平均${h.avg5 !== null ? h.avg5 : '－'}${h.avg5Estimated ? '<span class="est">*</span>' : ''}
+            ・単勝${!isNaN(h.odds) ? h.odds.toFixed(1) : '－'}
+            ・<span class="col-ninki ${ninkiClass}">${h.ninki || '－'}人気</span>
+          </span>
+        </div>
+        <div class="race-chip-grid">${chips}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="horse-card-list">${cards}</div>
+    <p class="foot-note">馬場指数(　)のマイナス幅が大きい順に各馬ごと並べ替え。同値の場合は基準会場が一致する方、次に基準距離に近い方を上位に。緑枠は基準会場と一致。各チップ上部の小さいラベルは元の時系列(前走など)。* は芝/ダートなど異なる条件のレースが混ざった平均(netkeiba公式表記)。印はここで仮設定できますが保存はされません。</p>`;
+  }
+
+  // ===== 印の自動付与(2026-09-03 改訂4 / ユーザー指定の手順どおり) =====
+  // 手順:
+  //  1. 前走の馬場指数が同じ馬をグループにまとめる(前走が空欄なら2走前→3走前)
+  //  2. 2頭以上のものをグループとする
+  //  3. 2頭以上のグループが2つ以上ある場合
+  //       各グループの平均指数を出し、平均が高い上位2グループを残す。それ以外は落とす
+  //  4. 2頭以上のグループが1つしかない場合
+  //       1頭だけの馬を全部まとめて1つのグループとし、その平均指数を出す
+  //       2つのグループの平均指数を比べ、高い方を残して低い方を落とす
+  //  5. 残ったグループに3頭以上いたら、そのグループ内の指数上位3頭に絞る
+  //  6. 残った馬を全部合わせる
+  //  7. ◎ = 前走指数が最も高い馬。それ以外は前走指数の低い順に ○ ▲ △ (5頭目以降も△)
+  //     指数が同値のときは人気薄(オッズが高い方)を上に置く
+  //     ※指数が低い方を上位に置くのは、その方が配当妙味のある馬券になるため。
+
+  // ===== 枠番/枠色 =====
+  // 8頭以下は馬番=枠番。9頭以上は外の8枠から順に2頭ずつ詰める(余りは後ろの枠へ)。
+  // 色は 1白/2黒/3赤/4青/5黄/6緑/7橙/8桃。
+  function wakuOf(number, total) {
+    if (!total || total <= 8) return number;
+    const base = Math.floor(total / 8);
+    const extra = total % 8;
+    let n = 0;
+    for (let w = 1; w <= 8; w++) {
+      n += base + (w > 8 - extra ? 1 : 0);
+      if (number <= n) return w;
+    }
+    return 8;
+  }
+
+  // 前走を拾う。競走中止(タイム指数が「-」で欠測)の走は無かったものとして飛ばす。
+  // 前走が空欄または競走中止なら2走前→3走前の順に遡る。
+  function pickPrevRace(h) {
+    for (const k of ['r1', 'r2', 'r3']) {
+      const x = h.races[k];
+      if (x && x.trackIndex !== null && x.timeIndex !== null) return x;
+    }
+    return null;
+  }
+
+  // 前走の馬場指数が同値の馬をグループ化(表示用の順位も付ける)
+  // 前走(グループ化に使った走)が本レースと同じ距離/同じコースかを判定する。
+  // 同距離=青枠 / 同コース(場+芝ダ)=緑枠 / 同距離かつ同コース=赤枠
+  // コース表記から芝/ダを取り出す
+  function extractSurface(course) {
+    if (!course) return null;
+    if (course.includes('障')) return '障';
+    if (course.includes('ダ')) return 'ダ';
+    if (course.includes('芝')) return '芝';
+    return null;
+  }
+  function courseMatchClass(race, baseline, meta) {
+    if (!race || !race.course) return '';
+    const surface = meta && meta.surface ? meta.surface : null;
+    // 芝/ダが違えば同距離・同コースとは見なさない
+    if (surface && extractSurface(race.course) !== surface) return '';
+    const sameVenue = baseline && baseline.venue && extractVenue(race.course) === baseline.venue;
+    const dist = meta && meta.distance ? parseInt(meta.distance, 10) : (baseline ? baseline.distance : null);
+    const sameDist = dist !== null && extractDistance(race.course) === dist;
+    if (sameVenue && sameDist) return 'is-same-both';
+    if (sameVenue) return 'is-same-course';
+    if (sameDist) return 'is-same-dist';
+    return '';
+  }
+  // ペースの色マーク
+  const PACE_DOT = { S: '🔵', M: '🟢', H: '🔴' };
+  // 人気の色: 10倍以下=赤 / 100倍以上=青
+  function oddsClass(odds) {
+    if (isNaN(odds)) return '';
+    if (odds <= 10) return 'is-odds-low';
+    if (odds >= 100) return 'is-odds-high';
+    return '';
+  }
+
+  // 「過去1年最高」と「近5走で最も高い指数を出した走」が、
+  // 本レースと同距離・同コース・同ペースかを判定する。
+  function bestMatchInfo(horse, baseline, meta, prevRace) {
+    const dist = meta && meta.distance ? parseInt(meta.distance, 10) : (baseline ? baseline.distance : null);
+    const venue = baseline ? baseline.venue : null;
+    const surface = meta && meta.surface ? meta.surface : null;
+    const judge = race => {
+      if (!race || !race.course) return null;
+      // 芝/ダが違う走は距離・コースの一致とは見なさない(ペースだけ比べる)
+      const sameSurface = !surface || extractSurface(race.course) === surface;
+      const sameDist = sameSurface && dist !== null && extractDistance(race.course) === dist;
+      const sameVenue = sameSurface && !!venue && extractVenue(race.course) === venue;
+      const samePace = !!prevRace && !!race.pace && !!prevRace.pace && race.pace === prevRace.pace;
+      return { sameDist, sameVenue, samePace, all: sameDist && sameVenue && samePace, race };
+    };
+    // 近5走のうち最も指数が高い走
+    let top = null;
+    NEAR5_KEYS.forEach(k => {
+      const x = horse.races[k];
+      if (!x || x.timeIndex === null) return;
+      if (!top || x.timeIndex >= top.timeIndex) top = x;
+    });
+    return { best1y: judge(horse.races && horse.races.best1y), near5Top: judge(top) };
+  }
+  // 一致の度合いをバッジにする(距離D / コースC / ペースP、3つ揃えば強調)
+  function matchBadge(label, info) {
+    if (!info) return '';
+    const parts = [];
+    // 距離=青 / コース=緑 / ペース=赤(枠色の対応に合わせる)
+    if (info.sameDist) parts.push('<span class="m-dist">距</span>');
+    if (info.sameVenue) parts.push('<span class="m-course">場</span>');
+    if (info.samePace) parts.push('<span class="m-pace">ペ</span>');
+    if (!parts.length) return '';
+    return `<span class="grp-match ${info.all ? 'is-full' : ''}"><span class="m-label">${label}</span>${parts.join('')}</span>`;
+  }
+
+  // ---- 中央(JRA) ----
+  // 手順1〜5(グループ化・採用グループ選定)は地方と同じ。
+  // 違うのは○の扱いだけ:
+  //   ・現状の○(採用グループ内で前走指数が最下位の馬)は 5走平均が3位以内なら残す
+  //   ・3位以内でなければ印から除外し、単独馬の中で近走最高指数が1位の馬を○に入れる
+  //   ・近走最高が同値なら人気上位(オッズが低い方)を取る
+  //   ・単独馬がいなければ○は空席
+
+  // グループの採用/不採用を全部表示する
+  // 採用グループから前走指数の上位2頭、不採用グループから上位1頭ずつを選ぶ。
+  // 並びは前走指数・近5走最高・平均の順位合計が小さい順(同値なら人気上位が上)。
+
+  // 上から順に付ける印。頭数が9頭以上になった分は最後の印(◆)を繰り返す。
+
+  // 各馬情報: グループ分けをせず、全馬を「同条件への近さ→指数の高さ」で並べる。
+  // 同条件の近さは 距離一致 + コース一致 + ペース一致 の数(前走・過去1年最高・近5走最高)で見る。
+  // 想定ペース(出走各馬の前走ペースの多数決、同数は H > M > S)
+  // 本レースと同じ芝/ダの走のうち最も新しいものを返す。
+  // 該当が無ければ従来どおり前走(繰り上げ後)を使う。
+  function pickSameSurfaceRace(horse, meta) {
+    const surface = meta && meta.surface ? meta.surface : null;
+    if (surface) {
+      for (let i = NEAR5_KEYS.length - 1; i >= 0; i--) {
+        const rc = horse.races[NEAR5_KEYS[i]];
+        if (!rc || rc.timeIndex === null) continue;
+        if (extractSurface(rc.course) === surface) return rc;
+      }
+    }
+    return pickPrevRace(horse);
+  }
+
+  // 想定ペース: 本レースと同じ芝/ダの直近走のペースで多数決(同数は H > M > S)
+  function estimatePace(horses, meta) {
+    const cnt = { H: 0, M: 0, S: 0 };
+    horses.forEach(h => {
+      const p = pickSameSurfaceRace(h, meta);
+      if (p && p.pace && cnt[p.pace] !== undefined) cnt[p.pace]++;
+    });
+    if (cnt.H + cnt.M + cnt.S === 0) return null;
+    return ['H', 'M', 'S'].reduce((a, b) => (cnt[b] > cnt[a] ? b : a));
+  }
+
+  // 印の選定
+  //   ◎○ : 想定ペースを踏まえた同条件馬(距離・コース・ペース一致度)の上位2頭
+  //   ▲△ : それ以外で単純に能力(前走指数)が高い馬
+  //   ▽☆ : 想定ペースと真逆のペースで能力が高い馬
+  //          (想定H→S / 想定S→H / 想定Mの場合はHとSから1頭ずつ)
+  function buildPaceMarks(horses, baseline, meta) {
+    const est = estimatePace(horses, meta);
+    const surface = meta && meta.surface ? meta.surface : null;
+
+    // ---- 各馬の材料をそろえる ----
+    let rows = horses.map(h => {
+      // 基準走 = 本レースと同じ芝/ダの直近走(無ければ前走)
+      const prev = pickSameSurfaceRace(h, meta);
+      if (!prev) return null;
+      return { horse: h, prev, cm: courseMatchClass(prev, baseline, meta),
+               bm: bestMatchInfo(h, baseline, meta, prev) };
+    }).filter(Boolean);
+    if (!rows.length) return null;
+
+    const bestMap = new Map(buildBestIndexRanking(horses).rows.map(v => [v.horse.number, v.race.timeIndex]));
+    rows.forEach(x => {
+      // 本レースと同じ芝/ダの走だけを集める(芝のレースでダートの高指数を能力に数えない)
+      const same = [];
+      NEAR5_KEYS.forEach(k => {
+        const rc = x.horse.races[k];
+        if (!rc || rc.timeIndex === null) return;
+        if (surface && extractSurface(rc.course) !== surface) return;
+        same.push(rc.timeIndex);
+      });
+      x.sameCount = same.length;
+      x.nearBest = same.length ? Math.max(...same)
+        : (bestMap.has(x.horse.number) ? bestMap.get(x.horse.number) : null);
+      x.avg5 = same.length ? Math.round(same.reduce((a, b) => a + b, 0) / same.length)
+        : ((x.horse.avg5 === null || x.horse.avg5 === undefined) ? null : x.horse.avg5);
+      // ---- 条件の材料(印の選定に使う) ----
+      const baseDist = baseline && baseline.distance ? parseInt(baseline.distance, 10) : null;
+      const baseVen  = baseline && baseline.venue ? baseline.venue : null;
+      // 同じ芝ダ かつ 同距離 の走の最高指数
+      const sd = [];
+      // 同じ芝ダ かつ 同コース(開催場) の走の最高指数
+      const sc = [];
+      // 想定ペースと同じペースで走ったときの最高指数
+      const sp = [];
+      NEAR5_KEYS.forEach(k => {
+        const rc = x.horse.races[k];
+        if (!rc || rc.timeIndex === null) return;
+        const sameSurf = !surface || extractSurface(rc.course) === surface;
+        if (sameSurf && baseDist && extractDistance(rc.course) === baseDist) sd.push(rc.timeIndex);
+        if (sameSurf && baseVen && extractVenue(rc.course) === baseVen) sc.push(rc.timeIndex);
+        if (est && rc.pace === est) sp.push(rc.timeIndex);
+      });
+      x.sameDistBest = sd.length ? Math.max(...sd) : null;
+      x.sameCourseBest = sc.length ? Math.max(...sc) : null;
+      // 同コース(開催場) かつ 同距離 の走の最高指数
+      const scd = [];
+      NEAR5_KEYS.forEach(k => {
+        const rc = x.horse.races[k];
+        if (!rc || rc.timeIndex === null) return;
+        if (surface && extractSurface(rc.course) !== surface) return;
+        if (!baseDist || extractDistance(rc.course) !== baseDist) return;
+        if (!baseVen || extractVenue(rc.course) !== baseVen) return;
+        scd.push(rc.timeIndex);
+      });
+      x.sameCourseDistBest = scd.length ? Math.max(...scd) : null;
+      x.samePaceBest = sp.length ? Math.max(...sp) : null;
+      // 前走の条件
+      const pd = x.prev && x.prev.course ? extractDistance(x.prev.course) : null;
+      x.prevDistGap = (pd && baseDist) ? Math.abs(pd - baseDist) : null;
+      x.prevSameVenue = (x.prev && baseVen) ? (extractVenue(x.prev.course) === baseVen ? 1 : 0) : 0;
+      x.prevSameDist = (pd && baseDist) ? (pd === baseDist ? 1 : 0) : 0;
+      x.prevTrack = (x.prev && x.prev.trackIndex !== null) ? x.prev.trackIndex : null;
+    });
+    const all = rows.slice();
+
+    const denseRank = (list, val) => {
+      const sorted = list.filter(v => val(v) !== null && val(v) !== undefined)
+        .sort((a, b) => val(b) - val(a));
+      const map = new Map(); let pr = 0;
+      sorted.forEach((v, i) => {
+        const q = i > 0 ? sorted[i - 1] : null;
+        const rk = (q && val(q) === val(v)) ? pr : pr + 1;
+        pr = rk; map.set(v.horse.number, rk);
+      });
+      return map;
+    };
+
+    // ---- 印を決める3つの物差し(順位は全出走馬で付ける) ----
+    // 近走最高の物差しは、今回の条件との接点が1つも無い馬には使わない。
+    //   接点 = 同距離の走がある / 同コースの走がある / 前走が同距離 / 前走が同コース
+    // どれも無い馬は、別の場・別の距離で出した1走だけで上位に来てしまうため外す。
+    // (順位の付け方は変えない。該当馬がこの物差しを持たなくなるだけ)
+    const hasLink = x =>
+      (x.sameDistBest !== null && x.sameDistBest !== undefined) ||
+      (x.sameCourseBest !== null && x.sameCourseBest !== undefined) ||
+      x.prevSameDist === 1 || x.prevSameVenue === 1;
+    const rNearAll = denseRank(all, v => (hasLink(v) ? v.nearBest : null));
+    const rPrevAll = denseRank(all, v => v.prev.timeIndex);
+    const rAvgAll  = denseRank(all, v => v.avg5);
+    const LAST = all.length + 1;
+    const rankSet = x => {
+      const n = x.horse.number;
+      return [rNearAll.has(n) ? rNearAll.get(n) : LAST,
+              rPrevAll.has(n) ? rPrevAll.get(n) : LAST,
+              rAvgAll.has(n)  ? rAvgAll.get(n)  : LAST];
+    };
+    const bestRankOf  = x => Math.min(...rankSet(x));
+    const worstRankOf = x => Math.max(...rankSet(x));
+
+    const byOdds = (a, b) => {
+      const ao = isNaN(a.horse.odds) ? Infinity : a.horse.odds;
+      const bo = isNaN(b.horse.odds) ? Infinity : b.horse.odds;
+      if (ao !== bo) return ao - bo;
+      return a.horse.number - b.horse.number;
+    };
+    const byPower = (a, b) => (b.prev.timeIndex - a.prev.timeIndex) || byOdds(a, b);
+    // 人気乖離: 指数の順位(近走最高)より人気の順位がどれだけ上か。正の値ほど「指数の割に人気」
+    const ninkiOf = x => (x.horse.ninki && !isNaN(x.horse.ninki)) ? x.horse.ninki : LAST;
+    const gapOf = x => (rNearAll.has(x.horse.number) ? rNearAll.get(x.horse.number) : LAST) - ninkiOf(x);
+    const prevPaceOK = x => (est && x.prev.pace) ? (x.prev.pace === est ? 1 : 0) : 0;
+    const topCountOf = x => rankSet(x).filter(r => r === 1).length;
+
+    // ---- 条件の材料を順位にする(全出走馬で付ける) ----
+    const rSameDist   = denseRank(all, v => v.sameDistBest);    // 同距離での最高指数
+    const rSameCourse = denseRank(all, v => v.sameCourseBest);  // 同コースでの最高指数
+    const rSamePace   = denseRank(all, v => v.samePaceBest);    // 想定ペースでの最高指数
+    const rTrackLow   = denseRank(all, v => (v.prevTrack === null ? null : -v.prevTrack)); // 前走馬場指数(低い順)
+    const rk = (m, x) => m.has(x.horse.number) ? m.get(x.horse.number) : LAST;
+    // 前走との距離差。1-200mの小幅変更を下に、201-400mを上に置く。
+    const distStep = x => {
+      const g = x.prevDistGap;
+      if (g === null) return 1;
+      if (g >= 201 && g <= 400) return 3;
+      if (g > 400) return 2;
+      if (g === 0) return 2;
+      return 0; // 1-200m
+    };
+    // 前走が同コース・同距離の両方一致
+    const prevFull = x => (x.prevSameVenue && x.prevSameDist) ? 1 : 0;
+
+    // 帯の中の並べ方。指数の順位だけでなく、距離・コース・ペース・馬場・人気を順に見る。
+    // 数値を足したり平均したりはせず、上から順に比べて決まった時点で確定する。
+    // ◎(4-5位帯の先頭)を決める並べ方。ここは変えない。
+    const byBase = (a, b) =>
+      (topCountOf(b) - topCountOf(a)) ||
+      (bestRankOf(a) - bestRankOf(b)) ||
+      (worstRankOf(a) - worstRankOf(b)) ||
+      (prevFull(b) - prevFull(a)) ||
+      (distStep(b) - distStep(a)) ||
+      (rk(rSameDist, a) - rk(rSameDist, b)) ||
+      (rk(rSameCourse, a) - rk(rSameCourse, b)) ||
+      (rk(rSamePace, a) - rk(rSamePace, b)) ||
+      (rk(rTrackLow, a) - rk(rTrackLow, b)) ||
+      byPower(a, b);
+    const byPaceFirst = (a, b) => (prevPaceOK(b) - prevPaceOK(a)) || byBase(a, b);
+    // 紐(◎以外)の並べ方。最悪順位を先に見る。
+    // 1つの数字だけ突出した馬より、どの物差しでも下に落ちない馬を上に置くため。
+    const bySteady = (a, b) =>
+      (worstRankOf(a) - worstRankOf(b)) ||
+      (topCountOf(b) - topCountOf(a)) ||
+      (bestRankOf(a) - bestRankOf(b)) ||
+      (prevFull(b) - prevFull(a)) ||
+      (distStep(b) - distStep(a)) ||
+      (rk(rSameDist, a) - rk(rSameDist, b)) ||
+      (rk(rSameCourse, a) - rk(rSameCourse, b)) ||
+      (rk(rSamePace, a) - rk(rSamePace, b)) ||
+      (rk(rTrackLow, a) - rk(rTrackLow, b)) ||
+      byPower(a, b);
+
+    const used = new Set();
+    const take = (list, n) => {
+      const out = [];
+      for (const x of list) {
+        if (used.has(x.horse.number)) continue;
+        out.push(x); used.add(x.horse.number);
+        if (out.length >= n) break;
+      }
+      return out;
+    };
+
+    // ---- 印の数は出走頭数で決める ----
+    const markCount = (n => {
+      if (n <= 5) return 3;
+      if (n <= 9) return 4;
+      if (n <= 12) return 5;
+      if (n <= 15) return 6;
+      return 7;
+    })(totalHorses || all.length);
+
+    // ---- 素の指数で抜けている馬を先に取る ----
+    // 近走最高を高い順に並べ、隣との間隔を出す。
+    // 下位に必ずできる「団子(間隔が0〜1で続く固まり)」を見つけ、その団子より上を抜けている馬とする。
+    // 団子が上位から始まるレース(全馬が詰まっている)では誰も取らない。
+    const breakaway = [];
+    {
+      const vals = all
+        .map(x => ({ row: x, v: (x.nearBest === null || x.nearBest === undefined) ? null : x.nearBest }))
+        .filter(x => x.v !== null)
+        .sort((a, b) => b.v - a.v);
+      if (vals.length >= 4) {
+        const gaps = [];
+        for (let i = 0; i < vals.length - 1; i++) gaps.push(vals[i].v - vals[i + 1].v);
+        // 上から見て、間隔が2以下で3回以上続く場所＝団子の開始位置
+        let clump = -1;
+        for (let i = 0; i + 2 < gaps.length; i++) {
+          if (gaps[i] <= 2 && gaps[i + 1] <= 2 && gaps[i + 2] <= 2) { clump = i; break; }
+        }
+        // 団子より上の馬を取る。印の数の半分までに限る。
+        if (clump > 0) {
+          const limit = Math.max(1, Math.floor(markCount / 2));
+          for (let j = 0; j < Math.min(clump, limit); j++) breakaway.push(vals[j].row);
+        }
+      }
+    }
+
+    // ---- そのコースを走り込んでいる馬を確保する ----
+    // 実測(12レース162頭・馬券内36頭・基準22%):
+    //   同コース×同距離の走数 5走 4/9=44% / 3走 2/7=29% / 0走 15/79=19%
+    // 近5走すべてが今回と同じコース・同じ距離の馬は、指数が低くても取る。
+    const grinders = [];
+    {
+      const baseD2 = baseline && baseline.distance ? parseInt(baseline.distance, 10) : null;
+      const baseV2 = baseline && baseline.venue ? baseline.venue : null;
+      if (baseD2 && baseV2) {
+        const cand = all.filter(x => {
+          let n = 0, tot = 0;
+          NEAR5_KEYS.forEach(k => {
+            const rc = x.horse.races[k];
+            if (!rc || rc.timeIndex === null) return;
+            tot++;
+            if (surface && extractSurface(rc.course) !== surface) return;
+            if (extractDistance(rc.course) !== baseD2) return;
+            if (extractVenue(rc.course) !== baseV2) return;
+            n++;
+          });
+          x.grindRuns = n;
+          return tot >= 5 && n >= 5;
+        }).sort((a, b) => byPower(a, b));
+        if (cand.length) grinders.push(cand[0]);
+      }
+    }
+
+    // ---- 帯ごとに1頭ずつ取る(上位帯に固めない) ----
+    // [最良順位の下限, 上限, 取る頭数, 並べ方]
+    // 1位帯と6-7位帯は廃止。その分を2-3位帯に回す。
+    // 1位帯は最後の1枠(⭐︎)。◎は4-5位帯。残りは全部2-3位帯で埋める。
+    const BANDS = [];
+    BANDS.push([4, 5, 1, byBase]);        // 4-5位帯 → ◎ (従来の並べ方)
+    for (let n = 0; n < markCount - 2; n++) {
+      BANDS.push([2, 3, 1, bySteady]);    // 2-3位帯 → ◯▲🔺△▽ (最悪順位を先に見る)
+    }
+    BANDS.push([1, 1, 1, byPaceFirst]);   // 1位帯   → ⭐︎
+    const spread = [];
+    // 抜けている馬を先に確保する
+    breakaway.forEach(x => { if (spread.length < markCount) spread.push(...take([x], 1)); });
+    // そのコースを走り込んでいる馬を確保する
+    grinders.forEach(x => { if (spread.length < markCount) spread.push(...take([x], 1)); });
+
+    BANDS.forEach(([lo, hi, k, cmp], i) => {
+      if (spread.length >= markCount) return;
+      const before = spread.length;
+      const c = all.filter(x => { const r = bestRankOf(x); return r >= lo && r <= hi; });
+      spread.push(...take(c.slice().sort(cmp), k));
+      // 2-3位帯に頭数が足りず埋まらなかった枠は、4-5位帯から埋める
+      if (spread.length === before && lo === 2 && hi === 3) {
+        const c45 = all.filter(x => { const r = bestRankOf(x); return r >= 4 && r <= 5; });
+        spread.push(...take(c45.slice().sort(bySteady), k));
+      }
+    });
+    let picked = [...spread];
+
+    // ---- 危険 = 3つの物差しがどれも8位以下 ----
+    const TOP = 7;
+    const LENSES = [
+      { key: '近走最高', rank: rNearAll },
+      { key: '基準走', rank: rPrevAll },
+      { key: '5走平均', rank: rAvgAll },
+    ];
+    const lensRanks = x => LENSES
+      .map(L => ({ key: L.key, r: L.rank.get(x.horse.number) }))
+      .filter(v => v.r !== undefined);
+    const hitsOf = x => lensRanks(x).filter(v => v.r <= TOP);
+
+    const dropped = picked.filter(x => hitsOf(x).length === 0)
+      .map(x => ({ horse: x.horse, all: lensRanks(x) }));
+    const droppedNums = new Set(dropped.map(x => x.horse.number));
+    let survivors = picked.filter(x => !droppedNums.has(x.horse.number));
+
+    // ---- 候補 = 印にも危険にも入らず、3つのどれかが7位以内。最良順位の良い順 ----
+    const survivorNums = new Set(survivors.map(x => x.horse.number));
+    const bench = all
+      .filter(x => !survivorNums.has(x.horse.number) && !droppedNums.has(x.horse.number))
+      .map(x => ({ row: x, hits: hitsOf(x) }))
+      .filter(x => x.hits.length > 0)
+      .sort((a, b) => (bestRankOf(a.row) - bestRankOf(b.row)) ||
+        (worstRankOf(a.row) - worstRankOf(b.row)) || byPower(a.row, b.row));
+
+    const promoted = [];
+    // 候補(bench)から印に入れる枠。
+    // 2-3位帯の下位の枠から充てる。そのレースで存在する枠(index < markCount)だけが対象。
+    while (survivors.length < markCount && bench.length) {
+      const b = bench.shift();
+      promoted.push(b);
+      survivors.push(b.row);
+    }
+    if (survivors.length < markCount) {
+      const rest = all.filter(x => !survivors.some(s => s.horse.number === x.horse.number) &&
+                                   !droppedNums.has(x.horse.number))
+        .sort(byBase);
+      for (const x of rest) {
+        if (survivors.length >= markCount) break;
+        survivors.push(x);
+      }
+    }
+    if (survivors.length > markCount) survivors = survivors.slice(0, markCount);
+
+    // ---- 指標一覧の表示用: 3つの物差しの順位・値・差 ----
+    // 指標一覧に出す物差し。印の選定に使っているものは全部出す。
+    const LENS_VAL = {
+      近走最高: x => (x.nearBest === null || x.nearBest === undefined ? null : x.nearBest),
+      基準走: x => (x.prev && x.prev.timeIndex !== null ? x.prev.timeIndex : null),
+      '5走平均': x => (x.avg5 === null || x.avg5 === undefined ? null : x.avg5),
+      '同コース×同距離': x => (x.sameCourseDistBest === null || x.sameCourseDistBest === undefined ? null : x.sameCourseDistBest),
+      同距離最高: x => (x.sameDistBest === null || x.sameDistBest === undefined ? null : x.sameDistBest),
+      同コース最高: x => (x.sameCourseBest === null || x.sameCourseBest === undefined ? null : x.sameCourseBest),
+      想定ペース最高: x => (x.samePaceBest === null || x.samePaceBest === undefined ? null : x.samePaceBest),
+      前走馬場: x => (x.prevTrack === null || x.prevTrack === undefined ? null : -x.prevTrack),
+      人気乖離: x => gapOf(x),
+    };
+    const lensSorted = {};
+    Object.keys(LENS_VAL).forEach(k => {
+      lensSorted[k] = Array.from(new Set(all.map(LENS_VAL[k])
+        .filter(v => v !== -Infinity && v !== null && v !== undefined)))
+        .sort((a, b) => b - a);
+    });
+    const lensDetail = x => Object.keys(LENS_VAL).map(k => {
+      const v = LENS_VAL[k](x);
+      if (v === -Infinity || v === null || v === undefined) return null;
+      const list = lensSorted[k];
+      const r = list.indexOf(v) + 1;
+      if (r === 0) return null;
+      const diff = (r === 1) ? (list.length > 1 ? list[0] - list[1] : null) : list[0] - v;
+      return { key: k, rank: r, value: v, diff, isTop: r === 1 };
+    }).filter(Boolean);
+
+    // 記録用: 全出走馬の順位をそのまま残す(印が付かなかった馬も含む)
+    const rankRecord = new Map(all.map(x => {
+      const rs = rankSet(x);
+      return [x.horse.number, {
+        near: rs[0] === LAST ? null : rs[0],
+        prev: rs[1] === LAST ? null : rs[1],
+        avg: rs[2] === LAST ? null : rs[2],
+        best: bestRankOf(x), worst: worstRankOf(x),
+        nearBest: x.nearBest, prevIndex: x.prev ? x.prev.timeIndex : null, avg5: x.avg5,
+        grindRuns: x.grindRuns || 0,
+        // 印の選定に使っていない物差しも含めて全部残す(あとで比較するため)
+        lens: lensDetail(x),
+      }];
+    }));
+
+    // 選定枠 index: 0=1位帯 1=2-3位帯 2=4-5位帯 3=6-7位帯 4=残り枠1 5=残り枠2 6=8-9位帯
+    const MARKS = ['◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+    // 基準走(前走指数)が1位の馬が印から漏れていたら、印の中で
+    // 「評価と人気が最も合っていない馬」と入れ替える。
+    //   合っていない = 3つの物差しの最良順位 と 人気の順位 の差が大きい。
+    //   指数が下位なのに人気している馬も、指数が上位なのに人気がない馬も対象(差の絶対値)。
+    {
+      const inMark = new Set(survivors.map(x => x.horse.number));
+      const prevTop = all.filter(x =>
+        rPrevAll.get(x.horse.number) === 1 && !inMark.has(x.horse.number));
+      if (prevTop.length && survivors.length) {
+        prevTop.sort(byBase);
+        const ninkiRank = x => (x.horse.ninki && !isNaN(x.horse.ninki)) ? x.horse.ninki : LAST;
+        const mismatch = x => Math.abs(bestRankOf(x) - ninkiRank(x));
+        let worst = 0;
+        for (let i = 1; i < survivors.length; i++) {
+          if (mismatch(survivors[i]) > mismatch(survivors[worst])) worst = i;
+        }
+        survivors[worst] = prevTop[0];
+      }
+    }
+
+    // 9頭以下は帯を使わず、各馬情報に出ている指数(基準走)の高い順にそのまま印を付ける。
+    // 頭数が少なく、帯に分けても中身がほとんど動かないため。
+    if ((totalHorses || all.length) <= 9) {
+      const ordered = all.slice().sort(byPower).slice(0, markCount);
+      const MARKS9 = ['◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+      return {
+        est,
+        rows: ordered.map((x, i) => ({ ...x, mark: MARKS9[i], promoted: false, lens: lensDetail(x) })),
+        pickup: [],
+        danger: [],
+        promoted: [],
+        lensAll: new Map(all.map(x => [x.horse.number, lensDetail(x)])),
+        rankRecord, allRows: all, breakawayNums: new Set(breakaway.map(x => x.horse.number)),
+        grinderNums: new Set(grinders.map(x => x.horse.number)),
+      };
+    }
+
+    // 選定順に記号を割り当てる: 0=4-5位帯 → ◎ / 1〜=2-3位帯 → ◯▲🔺△▽ / 最後=1位帯 → ⭐︎
+    const MARK_BY_SLOT = survivors.map((_, i) =>
+      (i === survivors.length - 1 && survivors.length === markCount) ? '⭐︎' : MARKS[i]);
+    const promotedNums = new Set(promoted.map(x => x.row.horse.number));
+    const marked = survivors
+      .map((x, i) => ({
+        ...x, mark: MARK_BY_SLOT[i] || MARKS[i],
+        promoted: promotedNums.has(x.horse.number),
+        lens: lensDetail(x),
+      }))
+      .sort((a, b) => MARKS.indexOf(a.mark) - MARKS.indexOf(b.mark));
+    const lensAll = new Map(all.map(x => [x.horse.number, lensDetail(x)]));
+    // 入れ替えで後から印に入った馬を候補から除く
+    const finalMarked = new Set(survivors.map(x => x.horse.number));
+    const pickup = bench
+      .filter(x => !finalMarked.has(x.row.horse.number))
+      .slice(0, 3)
+      .map(x => ({ horse: x.row.horse, hits: x.hits }));
+
+    return { est, rows: marked, pickup, danger: dropped, promoted, lensAll, rankRecord, allRows: all,
+      breakawayNums: new Set(breakaway.map(x => x.horse.number)),
+      grinderNums: new Set(grinders.map(x => x.horse.number)) };
+  }
+
+
+  // ===== 印の付け方 v2（重複を除いた15レースの実測から作成 / 3回目の更新） =====
+  // 根拠は「物差しごとの順位帯 → 3着内率」。合成した最良順位で帯分けするより、
+  // 個別の物差しの上位帯で取る方が実測が良かったため、帯構造をやめて
+  // 実測の高い条件から順に埋める形にした。
+  // 使わないもの:
+  //   人気 … 選定に使わない(比較の基準としてのみ集計に残す)
+  //   前走馬場 … 1位23.8%より4-5位29.3%が高く、順位と結果が逆転しているため
+  const V2_RULES = [
+    { key: '基準走',           lo: 1, hi: 1, rate: 66.7, n: 15 },
+    { key: '同コース×同距離',  lo: 2, hi: 3, rate: 56.7, n: 30 },
+    { key: '同コース最高',     lo: 1, hi: 1, rate: 53.3, n: 15 },
+    { key: '最良順位',         lo: 1, hi: 1, rate: 50.0, n: 36 },
+    { key: '5走平均',          lo: 2, hi: 3, rate: 50.0, n: 32 },
+    { key: '近走最高',         lo: 1, hi: 1, rate: 46.7, n: 15 },
+    { key: '同距離最高',       lo: 1, hi: 1, rate: 46.7, n: 15 },
+    { key: '5走平均',          lo: 1, hi: 1, rate: 43.8, n: 16 },
+    { key: '近走最高',         lo: 2, hi: 3, rate: 40.6, n: 32 },
+    { key: '人気乖離',         lo: 2, hi: 3, rate: 40.0, n: 45 },
+    { key: '同距離最高',       lo: 2, hi: 3, rate: 38.7, n: 31 },
+    { key: '想定ペース最高',   lo: 2, hi: 3, rate: 38.7, n: 31 },
+    { key: '想定ペース最高',   lo: 1, hi: 1, rate: 37.5, n: 16 },
+    { key: '基準走',           lo: 2, hi: 3, rate: 36.1, n: 36 },
+    { key: '同コース×同距離',  lo: 1, hi: 1, rate: 33.3, n: 15 },
+    { key: '近走最高',         lo: 4, hi: 5, rate: 32.4, n: 37 },
+    { key: '同距離最高',       lo: 4, hi: 5, rate: 32.4, n: 34 },
+    { key: '人気乖離',         lo: 4, hi: 5, rate: 31.9, n: 47 },
+  ];
+
+
+
+  // 記録から優先リストを作る。開催場が一致する記録があればそれだけを使う。
+  function buildRulesFromLog(venue) {
+    let list = [];
+    try { list = recLoad(); } catch (e) { list = []; }
+    const same = venue ? list.filter(r => (r.venue || '') === venue) : [];
+    const use = same.length ? same : list;
+    if (!use.length) return { rules: V2_RULES, src: 'なし（手で書いた並び）', races: 0 };
+    const BANDS = [[1, 1], [2, 3], [4, 5]];
+    const KEYS = LENS_DEF.filter(L => L[0] !== '人気');
+    const acc = new Map();
+    use.forEach(rec => {
+      const top3 = [rec.result.p1, rec.result.p2, rec.result.p3];
+      (rec.horses || []).forEach(h => {
+        const t = top3.includes(h.n) ? 1 : 0;
+        KEYS.forEach(L => {
+          const r = L[1](h);
+          if (r === null || r === undefined || isNaN(r)) return;
+          BANDS.forEach(([lo, hi]) => {
+            if (r < lo || r > hi) return;
+            const k = L[0] + '|' + lo + '|' + hi;
+            const v = acc.get(k) || { key: L[0], lo, hi, n: 0, hit: 0 };
+            v.n++; v.hit += t; acc.set(k, v);
+          });
+        });
+      });
+    });
+    const rules = [...acc.values()]
+      .filter(v => v.n > 0)
+      .map(v => ({ key: v.key, lo: v.lo, hi: v.hi, rate: Math.round(v.hit / v.n * 1000) / 10, n: v.n }))
+      .sort((a2, b2) => (b2.rate - a2.rate) || (b2.n - a2.n));
+    return {
+      rules,
+      src: same.length ? `${venue}の記録` : '全記録',
+      races: use.length,
+    };
+  }
+
+  let v3Info = null;
+  function buildPaceMarksV3(horses, baseline, meta) {
+    const venue = (meta && meta.venue) ? meta.venue : (baseline && baseline.venue) ? baseline.venue : '';
+    const built = buildRulesFromLog(venue);
+    v3Info = built;
+    return buildPaceMarksWithRules(horses, baseline, meta, built.rules, 'v3');
+  }
+
+  function buildPaceMarksV2(horses, baseline, meta) {
+    return buildPaceMarksWithRules(horses, baseline, meta, V2_RULES, 'v2');
+  }
+
+  function buildPaceMarksWithRules(horses, baseline, meta, RULES, tag) {
+    const r = buildPaceMarks(horses, baseline, meta);
+    if (!r || !r.rows.length) return r;
+    // 材料は v1 と同じものを使い、印の付け方だけ変える
+    const rr = r.rankRecord || new Map();
+    const lensAll = r.lensAll || new Map();
+    const all = horses.filter(h => rr.has(h.number));
+    if (!all.length) return r;
+
+    const rankOf = (h, key) => {
+      if (key === '最良順位') {
+        const q = rr.get(h.number);
+        return (q && q.best !== null && q.best !== undefined) ? q.best : null;
+      }
+      const list = lensAll.get(h.number) || [];
+      const v = list.find(x => x.key === key);
+      return v ? v.rank : null;
+    };
+    // 同じ段に複数いるときは、その物差しの順位が良い順。
+    // 同順位なら単勝オッズが高い方（人気に寄せない）を上に置く。
+    const oddsDesc = (a, b) => {
+      const ao = isNaN(a.odds) ? -1 : a.odds;
+      const bo = isNaN(b.odds) ? -1 : b.odds;
+      return (bo - ao) || (a.number - b.number);
+    };
+
+    const markCount = (n => {
+      if (n <= 5) return 3;
+      if (n <= 9) return 4;
+      if (n <= 12) return 5;
+      if (n <= 15) return 6;
+      return 7;
+    })(totalHorses || all.length);
+
+    const used = new Set();
+    const picked = [];
+    const why = new Map();
+    RULES.forEach(rule => {
+      if (picked.length >= markCount) return;
+      const cand = all.filter(h => {
+        if (used.has(h.number)) return false;
+        const rk = rankOf(h, rule.key);
+        return rk !== null && rk >= rule.lo && rk <= rule.hi;
+      }).sort((a, b) => {
+        const ra = rankOf(a, rule.key), rb = rankOf(b, rule.key);
+        return (ra - rb) || oddsDesc(a, b);
+      });
+      for (const h of cand) {
+        if (picked.length >= markCount) break;
+        used.add(h.number);
+        picked.push(h);
+        why.set(h.number, `${rule.key}${rule.lo === rule.hi ? rule.lo + '位' : rule.lo + '-' + rule.hi + '位'}（実測${rule.rate}%）`);
+      }
+    });
+    // 枠が余った場合だけ、どの条件にも当たらなかった馬から最良順位の良い順で埋める
+    if (picked.length < markCount) {
+      const rest = all.filter(h => !used.has(h.number)).sort((a, b) => {
+        const qa = rr.get(a.number), qb = rr.get(b.number);
+        const ba = (qa && qa.best !== null) ? qa.best : 999;
+        const bb = (qb && qb.best !== null) ? qb.best : 999;
+        return (ba - bb) || oddsDesc(a, b);
+      });
+      for (const h of rest) {
+        if (picked.length >= markCount) break;
+        used.add(h.number); picked.push(h);
+        why.set(h.number, '枠あまり（最良順位順）');
+      }
+    }
+
+    const MARKS = ['◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+    const byNum = new Map(r.rows.map(x => [x.horse.number, x]));
+    const srcAll = new Map((r.allRows || []).map(x => [x.horse.number, x]));
+
+    const rows = picked.map((h, i) => {
+      const src = byNum.get(h.number) || srcAll.get(h.number);
+      if (!src) return null;
+      return { ...src, mark: MARKS[i], promoted: false, why: why.get(h.number) || '',
+               lens: (lensAll.get(h.number) || []) };
+    }).filter(Boolean);
+
+    // 候補 = 印の次点。印と同じ優先リストを続けて適用し、枠から溢れた馬を上から3頭。
+    const markedNums = new Set(rows.map(x => x.horse.number));
+    const benchOut = [];
+    const benchWhy = new Map();
+    RULES.forEach(rule => {
+      if (benchOut.length >= 3) return;
+      const cand = all.filter(h => {
+        if (markedNums.has(h.number) || benchOut.some(x => x.number === h.number)) return false;
+        const rk = rankOf(h, rule.key);
+        return rk !== null && rk >= rule.lo && rk <= rule.hi;
+      }).sort((a2, b2) => {
+        const ra = rankOf(a2, rule.key), rb = rankOf(b2, rule.key);
+        return (ra - rb) || oddsDesc(a2, b2);
+      });
+      for (const h of cand) {
+        if (benchOut.length >= 3) break;
+        benchOut.push(h);
+        benchWhy.set(h.number, `${rule.key}${rule.lo === rule.hi ? rule.lo + '位' : rule.lo + '-' + rule.hi + '位'}（実測${rule.rate}%）`);
+      }
+    });
+    const pickup = benchOut.map(h => ({
+      horse: h,
+      hits: [{ key: benchWhy.get(h.number) || '', r: null }],
+    }));
+    return { ...r, rows, pickup, danger: [], promoted: [], logic: tag };
+  }
+
+  // 物差しの1位が2位とどれだけ離れているか。差がこの値以下なら「僅差」として赤で示す。
+  const THIN = 2;
+
+  // 印の記号 → CSSクラス。記号をそのままクラス名にすると絵文字で壊れるため
+  const MARK_ORDER_ALL = ['◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+  function markClass(mk) {
+    const i = MARK_ORDER_ALL.indexOf(mk);
+    return i >= 0 ? 'mk-' + (i + 1) : '';
+  }
+
+  // いま選ばれているロジックで印を出す
+  let markLogic = 'v3';
+  try {
+    const saved = localStorage.getItem('raceIndexParser.logic');
+    if (saved === 'v2' || saved === 'v3') markLogic = saved;
+  } catch (e) {}
+  function getMarks(horses, baseline, meta) {
+    if (markLogic === 'v3') return buildPaceMarksV3(horses, baseline, meta);
+    if (markLogic === 'v2') return buildPaceMarksV2(horses, baseline, meta);
+    return buildPaceMarks(horses, baseline, meta);
+  }
+
+  function renderPaceMarkSection(horses, baseline, meta) {
+    const r = getMarks(horses, baseline, meta);
+    if (!r) return '';
+    const lines = r.rows.map(x => {
+      const h = x.horse;
+      return `<div class="mark-row">
+        <span class="mark-badge ${markClass(x.mark)}">${x.mark}</span>
+        <span class="mark-num waku-${wakuOf(h.number, totalHorses)}">${h.number}</span>
+        <span class="mark-name">${escapeHtml(h.name)}</span>
+        <span class="mark-ninki">${h.ninki || '－'}人気</span>
+        <span class="mark-odds">${!isNaN(h.odds) ? h.odds.toFixed(1) : '－'}倍</span>
+      </div>`;
+    }).join('');
+    return `<div class="mark-list">${lines}</div>`;
+  }
+
+  function renderPaceBetSection(horses, baseline, meta) {
+    const r = getMarks(horses, baseline, meta);
+    if (!r || !r.rows.length) return '';
+    const axis = r.rows[0];
+    const rest = r.rows.slice(1);
+    const byNum = (a, b) => a.horse.number - b.horse.number;
+    const second = rest.slice(0, SECOND_PICK).sort(byNum);
+    const third = rest.slice().sort(byNum);
+    const secNums = second.map(x => x.horse.number);
+    const thiNums = third.map(x => x.horse.number);
+    const trio = new Set(); let tierce = 0;
+    secNums.forEach(a => thiNums.forEach(b => {
+      if (a === b) return;
+      trio.add([a, b].sort((x, y) => x - y).join('-')); tierce++;
+    }));
+    const chip = x => `<span class="bet-chip waku-${wakuOf(x.horse.number, totalHorses)}">${x.horse.number}</span>`;
+    return `<h2 class="section-title bet-head">推奨買い目</h2>
+      <div class="bet-box">
+        <div class="bet-row"><div class="bet-chips">${chip(axis)}</div><span class="bet-label">単複</span></div>
+        <div class="bet-row"><div class="bet-chips">${second.map(chip).join('')}</div><span class="bet-label">馬連・ワイド</span></div>
+        <div class="bet-row"><div class="bet-chips">${third.map(chip).join('')}</div><span class="bet-label">三連系</span></div>
+        <div class="bet-note">三連複<b>${trio.size}</b>点　/　三連単<b>${tierce}</b>点</div>
+      </div>`;
+  }
+
+  // 印には入らなかったが物差しの上位にいる馬 / 印は付いたがどの物差しでも下位の馬
+  // 「入れた方がいいかも」は画面から外した。
+  // 記録では次点として集計を続けているので、そちらで印より成績が良いかを見る。
+  function renderWatchSection(horses, baseline, meta) {
+    const r = getMarks(horses, baseline, meta);
+    if (!r || !r.danger || !r.danger.length) return '';
+    const line = (h, mark, body, cls) => `<div class="watch-row ${cls}">
+      <span class="watch-mark">${mark}</span>
+      <span class="mark-num waku-${wakuOf(h.number, totalHorses)}">${h.number}</span>
+      <span class="watch-name">${escapeHtml(h.name)}</span>
+      <span class="watch-body">${body}</span>
+      <span class="watch-ninki ${oddsClass(h.odds)}">${h.ninki || '－'}人気</span>
+    </div>`;
+    const out = r.danger.map(x => line(x.horse, '×',
+      x.all.map(v => `<span class="watch-tag dim">${v.key}${v.r}位</span>`).join(''), 'is-risk')).join('');
+    return `<h2 class="section-title">危険なので印から外した馬</h2>
+      <div class="watch-list">${out}</div>`;
+  }
+
+  function renderHorseInfoSection(horses, baseline, meta) {
+    if (!horses.length) return '';
+    const mk = getMarks(horses, baseline, meta);
+    const whyMap = new Map((mk && mk.rows ? mk.rows : [])
+      .map(x => [x.horse.number, { mark: x.mark, why: x.why || '' }]));
+    const surface = meta && meta.surface ? meta.surface : null;
+    const noData = [];
+    const rows = horses.map(h => {
+      // 基準にする走は本レースと同じ芝/ダの直近走
+      const prev = pickSameSurfaceRace(h, meta);
+      if (!prev) { noData.push({ horse: h, reason: '近5走に指数のある走がありません(新馬・長期休養など)' }); return null; }
+      // 本レースの芝ダで走ったことがあるか
+      const sameSurfN = NEAR5_KEYS.filter(k => {
+        const rc = h.races[k];
+        return rc && rc.timeIndex !== null && (!surface || extractSurface(rc.course) === surface);
+      }).length;
+      const prevSurf = extractSurface(prev.course);
+      const cm = courseMatchClass(prev, baseline, meta);
+      const bm = bestMatchInfo(h, baseline, meta, prev);
+      const cnt = info => (info ? (info.sameDist ? 1 : 0) + (info.sameVenue ? 1 : 0) + (info.samePace ? 1 : 0) : 0);
+      const prevScore = (cm === 'is-same-both' ? 2 : (cm ? 1 : 0));
+      const runN = NEAR5_KEYS.filter(k => { const rc = h.races[k]; return rc && rc.timeIndex !== null; }).length;
+      return {
+        horse: h, prev, cm, bm, sameSurfN, prevSurf, runN,
+        otherSurf: !!(surface && prevSurf && prevSurf !== surface),
+        score: prevScore + cnt(bm.best1y) + cnt(bm.near5Top),
+      };
+    }).filter(Boolean);
+
+    // 並び順
+    //   1. 同条件(距離かコースが一致)かつ想定ペースと同じ
+    //   2. 同条件かつ想定ペースと真逆(想定Mなら H・S の両方)
+    //   3. それ以外
+    // 各段の中は指数の高い順、同値はペース M > H > S、さらに同値なら人気上位。
+    const est = estimatePace(horses, meta);
+    const revOf = p => (est === 'H' ? p === 'S' : est === 'S' ? p === 'H' : (p === 'H' || p === 'S'));
+    const tierOf = x => {
+      const same = !!x.cm;
+      if (same && est && x.prev.pace === est) return 0;
+      if (same && est && revOf(x.prev.pace)) return 1;
+      return 2;
+    };
+    const PACE_PRI = { M: 0, H: 1, S: 2 };
+    rows.forEach(x => { x.tier = tierOf(x); });
+    rows.sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier - b.tier;
+      if (a.prev.timeIndex !== b.prev.timeIndex) return b.prev.timeIndex - a.prev.timeIndex;
+      const pa = PACE_PRI[a.prev.pace] === undefined ? 9 : PACE_PRI[a.prev.pace];
+      const pb = PACE_PRI[b.prev.pace] === undefined ? 9 : PACE_PRI[b.prev.pace];
+      if (pa !== pb) return pa - pb;
+      const ao = isNaN(a.horse.odds) ? Infinity : a.horse.odds;
+      const bo = isNaN(b.horse.odds) ? Infinity : b.horse.odds;
+      if (ao !== bo) return ao - bo;
+      return a.horse.number - b.horse.number;
+    });
+
+    const TIER_LABEL = ['同条件 × 想定ペース', '同条件 × 真逆ペース', 'それ以外'];
+    let curTier = -1;
+    const lines = rows.map(x => {
+      const h = x.horse;
+      const trk = x.prev.trackIndex;
+      const dot = PACE_DOT[x.prev.pace] || '';
+      const badges = matchBadge('最', x.bm.best1y) + matchBadge('近', x.bm.near5Top);
+      let head = '';
+      if (x.tier !== curTier) {
+        curTier = x.tier;
+        head = `<div class="tier-head">${TIER_LABEL[x.tier]}</div>`;
+      }
+      // 注意ラベル: 別条件(芝⇔ダ)の走を基準にしている / 同じ芝ダの経験が少ない / 走数自体が少ない
+      const notes = [];
+      if (x.otherSurf) notes.push(`<span class="hn-warn">${x.prevSurf || '別'}の走</span>`);
+      if (x.sameSurfN === 0) notes.push(`<span class="hn-warn">${surface || '同条件'}未経験</span>`);
+      else if (x.sameSurfN === 1) notes.push(`<span class="hn-thin">${surface || '同条件'}1走のみ</span>`);
+      if (x.runN <= 1) notes.push(`<span class="hn-warn">実績${x.runN}走</span>`);
+      else if (x.runN === 2) notes.push(`<span class="hn-thin">実績2走</span>`);
+      const wy = whyMap.get(h.number);
+      return head + `<div class="grp-line ${x.cm} ${notes.length ? 'has-note' : ''}">
+        ${wy ? `<span class="mark-badge ${markClass(wy.mark)}">${wy.mark}</span>` : '<span class="mark-badge"></span>'}
+        <span class="horse-num waku-${wakuOf(h.number, totalHorses)}">${h.number}</span>
+        <span class="grp-name">${escapeHtml(h.name)}</span>
+        ${dot ? `<span class="grp-dot">${dot}</span>` : ''}
+        <span class="grp-track">馬場 ${trk > 0 ? '+' + trk : trk}</span>
+        <span class="grp-idx">${x.prev.timeIndex}</span>
+        <span class="grp-ninki ${oddsClass(h.odds)}">${h.ninki || '－'}人気</span>
+        ${badges}
+        ${notes.length ? `<span class="hn-row">${notes.join('')}<span class="hn-course">基準走 ${escapeHtml(x.prev.course)}</span></span>` : ''}
+        ${wy && wy.why ? `<span class="why-row">${escapeHtml(wy.why)}で選出</span>` : ''}
+      </div>`;
+    }).join('');
+
+    return `<h2 class="section-title">各馬情報</h2>
+      <p class="rank-rule">①同条件かつ想定ペース　②同条件かつ真逆ペース　③それ以外　の順に並べ、各段は前走指数の高い順（同値は M &gt; H &gt; S）。<br>枠の色は前走が 青=同距離 / 緑=同コース / 赤=同距離かつ同コース。<b>最</b>=過去1年最高、<b>近</b>=近5走で最も指数が高い走の一致条件。<br>
+      赤ラベルは判断材料が足りない馬。<b>芝/ダの走</b>=本レースと違う条件の走を基準にしている、<b>未経験</b>=本レースの芝ダを走っていない、<b>実績◯走</b>=指数のある走がその数しかない。</p>
+      <div class="grp-list">${lines}</div>
+      ${noData.length ? `<div class="tier-head">指数のデータが無い馬</div>
+        <div class="grp-list">${noData.map(x => `<div class="grp-line has-note">
+          <span class="horse-num waku-${wakuOf(x.horse.number, totalHorses)}">${x.horse.number}</span>
+          <span class="grp-name">${escapeHtml(x.horse.name)}</span>
+          <span class="grp-ninki ${oddsClass(x.horse.odds)}">${x.horse.ninki || '－'}人気</span>
+          <span class="hn-row"><span class="hn-warn">${x.reason}</span></span>
+        </div>`).join('')}</div>` : ''}`;
+  }
+
+  // ===== 推奨買い目(2026-09-03 指示により追加) =====
+  // 軸=印の1頭目(◎)。2列目=軸を除いた印の上位3頭。3列目=2列目+残りの印すべて。
+  // 三連複は軸固定で「2列目から1頭・3列目から1頭」の重複を除いた組み合わせ数、
+  // 三連単は1着=軸固定・2着=2列目・3着=3列目(2着と別馬)の通り数を実際に数える。
+  const SECOND_PICK = 3; // 2列目(馬連・ワイド)に取る頭数
+
+  // ===== 指標一覧(2026-09-03 統合) =====
+  // 3指標(近5走の最高指数 / 平均指数 / 前走の馬場指数)を1頭1行にまとめて表示する。
+  // 順位に応じて色を変える: 1位=濃 / 2〜3位=中 / 4〜5位=薄 / 6位以下=無色。
+  function rankClass(rank) {
+    if (rank === null || rank === undefined) return 'lv-none';
+    if (rank === 1) return 'lv-1';
+    if (rank <= 3) return 'lv-2';
+    if (rank <= 5) return 'lv-3';
+    return 'lv-none';
+  }
+
+  // 指標一覧: 印を決めている4つの物差しをそのまま並べる。
+  // 印セクションと同じ buildPaceMarks の結果を使うので、印と内訳がずれない。
+  const LENS_ORDER = ['近走最高', '基準走', '5走平均', '同コース×同距離', '同距離最高', '同コース最高', '想定ペース最高', '前走馬場', '人気乖離'];
+  const LENS_LABEL = {
+    近走最高: '近走最高(条件優先)', 基準走: '基準走', '5走平均': '5走平均',
+    '同コース×同距離': '同コース×同距離',
+    同距離最高: '同距離最高', 同コース最高: '同コース最高', 想定ペース最高: '想定ペース最高',
+    前走馬場: '前走馬場(重い順)', 人気乖離: '人気乖離',
+  };
+  function renderUnifiedTable(horses, baseline, meta) {
+    const pm = getMarks(horses, baseline, meta);
+    if (!pm) return '';
+    const markMap = new Map(pm.rows.map(x => [x.horse.number, x.mark]));
+    const lensAll = pm.lensAll;
+    const dangerNums = new Set((pm.danger || []).map(x => x.horse.number));
+
+    const MARK_ORDER = { '◎': 0, '◯': 1, '▲': 2, '🔺': 3, '△': 4, '▽': 5, '⭐︎': 6 };
+    const detOf = n => (lensAll.get(n) || []);
+    const bestRank = n => {
+      const d = detOf(n);
+      return d.length ? Math.min(...d.map(v => v.rank)) : 99;
+    };
+    const sorted = horses.slice().sort((a, b) => {
+      const ma = markMap.has(a.number) ? MARK_ORDER[markMap.get(a.number)] : 99;
+      const mb = markMap.has(b.number) ? MARK_ORDER[markMap.get(b.number)] : 99;
+      if (ma !== mb) return ma - mb;
+      const ra = bestRank(a.number), rb = bestRank(b.number);
+      if (ra !== rb) return ra - rb;
+      return a.number - b.number;
+    });
+
+    const cell = (n, key) => {
+      const v = detOf(n).find(x => x.key === key);
+      if (!v) {
+        return `<div class="uni-cell"><span class="uni-lbl">${LENS_LABEL[key]}</span>` +
+          `<span class="uni-rank">－</span><span class="uni-val">－</span></div>`;
+      }
+      const thin = v.isTop && v.diff !== null && v.diff <= THIN;
+      const note = v.isTop ? (v.diff === null ? '' : `2位と${v.diff}`) : `1位と${v.diff}`;
+      return `<div class="uni-cell ${rankClass(v.rank)} ${thin ? 'is-thin-cell' : ''}">
+        <span class="uni-lbl">${LENS_LABEL[key]}</span>
+        <span class="uni-rank">${v.rank}位</span>
+        <span class="uni-val">${v.key === '前走馬場' ? -v.value : v.value}</span>
+        <span class="uni-diff ${thin ? 'thin' : (v.isTop ? 'clear' : '')}">${note}</span>
+      </div>`;
+    };
+
+    const cards = sorted.map(h => {
+      const mark = markMap.get(h.number) || '';
+      const tag = dangerNums.has(h.number) ? '<span class="uni-tag risk">除外</span>' : '';
+      return `<div class="uni-card ${mark ? 'has-mark' : ''}">
+        <div class="uni-head">
+          <span class="mark-badge ${markClass(mark)}">${mark || '<span class="no-mark">－</span>'}</span>
+          <span class="horse-num waku-${wakuOf(h.number, totalHorses)}">${h.number}</span>
+          <span class="uni-name">${escapeHtml(h.name)}</span>
+          ${tag}
+          <span class="uni-odds">${h.ninki || '－'}人気 ${!isNaN(h.odds) ? h.odds.toFixed(1) : '－'}倍</span>
+        </div>
+        <div class="uni-cells">${LENS_ORDER.map(k => cell(h.number, k)).join('')}</div>
+      </div>`;
+    }).join('');
+
+    return `<h2 class="section-title">指標一覧</h2>
+      <p class="rank-rule">印の選定に使っている物差しの順位・値・差です。帯（◎〜⭐︎の枠）を決めるのは上の3つ（近走最高・基準走・5走平均）。残りは同じ帯に複数いるとき、どれを取るかの判定に使います。<b>1位は「2位と◯」、2位以下は「1位と◯」</b>。1位で差が${THIN}以下なら<b class="thin-word">僅差</b>（赤）、${THIN + 1}以上なら明確な1位（緑）。<br>◎＝4-5位帯／◯＝残り枠1／▲＝1位帯／🔺＝2-3位帯／△＝6-7位帯／▽＝残り枠2／⭐︎＝8-9位帯。</p>
+      <div class="uni-list">${cards}</div>`;
+  }
+
+  // ===== 主軸ランキング(2026-09-03 差し替え) =====
+  // 1〜3Rの結果照合で、馬券内3頭を最も拾えたのが「近5走の最高指数(馬場指数を無視)」
+  // (9頭中8頭)、次が「平均指数」(6頭)、馬場指数を第1ソートにした2つは4頭だった。
+  // このためメインを近5走最高指数に差し替え、馬場優先の2ランキングは参考として下部へ移動した。
+  const NEAR5_KEYS = ['r5', 'r4', 'r3', 'r2', 'r1'];
+  const SLOT_JP = { r5: '5走前', r4: '4走前', r3: '3走前', r2: '2走前', r1: '前走' };
+
+  // 近5走(5走前〜前走)の中でタイム指数が最も高い走を拾う。「過去1年最高」列は対象外。
+  // 馬場指数は一切見ない。同指数が複数走ある場合は新しい走(前走に近い方)を採用。
+  function buildBestIndexRanking(horses) {
+    const rows = [];
+    const noData = [];
+    horses.forEach(h => {
+      let pick = null;
+      NEAR5_KEYS.forEach(k => {
+        const r = h.races[k];
+        if (!r || r.timeIndex === null) return;
+        if (!pick || r.timeIndex >= pick.race.timeIndex) pick = { race: r, key: k };
+      });
+      if (pick) rows.push({ horse: h, race: pick.race, usedKey: pick.key, usedLabel: SLOT_JP[pick.key] });
+      else noData.push({ horse: h });
+    });
+    rows.sort((a, b) => b.race.timeIndex - a.race.timeIndex || a.horse.number - b.horse.number);
+    let pr = 0;
+    rows.forEach((x, i) => {
+      const q = i > 0 ? rows[i - 1] : null;
+      if (q && q.race.timeIndex === x.race.timeIndex) { x.rank = pr; }
+      else { x.rank = pr + 1; pr = x.rank; } // DENSE_RANK
+    });
+    rows.forEach(x => { x.tied = rows.filter(y => y.rank === x.rank).length > 1; });
+    return { rows, noData };
+  }
+
+  // 両ランキング5位以内の重複抽出(2026-09-03 指示により追加)
+  // 前走ランキングと過去1年最高ランキングの両方で5位以内に入っている馬のみを挙げる。
+  // 同順位(=)は5位以内に含まれる限りすべて対象。スコア化・合成は行わない。
+
+  function renderDynamic(result, baseline) {
+    // 2026-09-03: 自動ランキング・自動印付与は指示なく実装しては差し戻す、を繰り返したため撤去。
+    // 検証段階が終わり、明示的な指示があるまでは、パースしたデータをそのまま表示するだけに留める。
+    // 印は手動プルダウン(馬別一覧内)でのみ設定可能。
+    const autoMarks = {};
+    // 中央は選出馬セクション、地方は従来の印セクションを出す(地方の表示は変更しない)
+    return renderWarnings(result.warnings) +
+      renderPaceMarkSection(result.horses, baseline, result.meta) +
+      renderPaceBetSection(result.horses, baseline, result.meta) +
+      renderWatchSection(result.horses, baseline, result.meta) +
+      renderHorseInfoSection(result.horses, baseline, result.meta) +
+      renderUnifiedTable(result.horses, baseline, result.meta) +
+      `<details class="fold"><summary>馬別一覧（各馬6走の元データ）</summary>` +
+      renderTable(result.horses, baseline, autoMarks) + `</details>`;
+  }
+
+  function render(result, baseline) {
+    output.innerHTML = renderLogicSwitch() +
+      renderMeta(result.meta, baseline, result.horses) +
+      `<div id="dynamicArea">${renderDynamic(result, baseline)}</div>`;
+  }
+
+  function renderError(msg) {
+    output.innerHTML = `<div class="error-box"><b>パースエラー</b><br>${escapeHtml(msg)}</div>`;
+  }
+
+  // ---------- イベント ----------
+
+  parseBtn.addEventListener('click', () => {
+    const text = rawInput.value;
+    if (!text.trim()) {
+      renderError('データが貼り付けられていません。');
+      return;
+    }
+    try {
+      const result = parseRaceData(text);
+      lastResult = result;
+      totalHorses = (result.meta && result.meta.headCount) ? parseInt(result.meta.headCount, 10) : result.horses.length;
+
+      currentBaseline = detectBaseline(result);
+      currentCircuit = detectCircuit(currentBaseline);
+      copyJsonBtn.disabled = false;
+      render(result, currentBaseline);
+      renderRecForm();
+    } catch (e) {
+      lastResult = null;
+      currentBaseline = null;
+      copyJsonBtn.disabled = true;
+      renderError(e.message);
+      renderRecForm();
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    rawInput.value = '';
+    output.innerHTML = '';
+    lastResult = null;
+    currentBaseline = null;
+    copyJsonBtn.disabled = true;
+    renderRecForm();
+  });
+
+  // 基準会場/距離の変更 → テーブル部分だけ再描画(貼り付け内容やレース情報欄はそのまま)
+  output.addEventListener('change', (e) => {
+    if (e.target.name !== 'markLogic') return;
+    markLogic = e.target.value;
+    try { localStorage.setItem(LOGIC_KEY, markLogic); } catch (err) {}
+    if (!lastResult || !currentBaseline) return;
+    render(lastResult, currentBaseline);
+  });
+
+  output.addEventListener('input', (e) => {
+    if (!lastResult || !currentBaseline) return;
+    if (e.target.id === 'baselineVenue') {
+      currentBaseline.venue = e.target.value.trim();
+    } else if (e.target.id === 'baselineDistance') {
+      const v = parseInt(e.target.value, 10);
+      currentBaseline.distance = isNaN(v) ? null : v;
+    } else {
+      return;
+    }
+    const dynamicArea = document.getElementById('dynamicArea');
+    if (dynamicArea) dynamicArea.innerHTML = renderDynamic(lastResult, currentBaseline);
+  });
+
+  copyJsonBtn.addEventListener('click', () => {
+    if (!lastResult) return;
+    const exportData = {
+      meta: lastResult.meta,
+      baseline: currentBaseline,
+      horses: lastResult.horses.map(h => ({
+        ...h,
+        racesSortedByTrackIndex: sortHorseRaces(h, currentBaseline || {}),
+      })),
+      warnings: lastResult.warnings,
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    navigator.clipboard.writeText(json).then(() => {
+      const orig = copyJsonBtn.textContent;
+      copyJsonBtn.textContent = 'コピーしました';
+      setTimeout(() => { copyJsonBtn.textContent = orig; }, 1500);
+    }).catch(() => {
+      alert('コピーに失敗しました。手動でご利用ください。');
+    });
+  });
+
+  output.innerHTML = `<div class="empty-state">データを貼り付けて「パース」を押してください。</div>`;
+
+  // ===== 成績記録 =====
+  // 印と着順をそのまま残すだけの記録。率は出すが、母数を必ず併記する。
+  const recFormArea = document.getElementById('recFormArea');
+  const recStatsArea = document.getElementById('recStatsArea');
+  const recLogArea = document.getElementById('recLogArea');
+  const recBackupMsg = document.getElementById('recBackupMsg');
+  const MARK_LIST = ['◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+
+  // ===== 保存層 =====
+  // localStorage は 5MB 前後で頭打ちになるため IndexedDB に置く。
+  // 記録はキー名を持たない配列形式（v3）で保存する。1レース約1.4KB。
+  //   馬 = [番, 名, 印, 人気, 単オッズ, 近走最高値, 基準走値, 5走平均値, 走込数, フラグ,
+  //         近走最高順, 基準走順, 5走平均順, 同コース×同距離順, 同距離最高順,
+  //         同コース最高順, 想定ペース最高順, 前走馬場順, 人気乖離順, 最良順, 最悪順]
+  const DB_NAME = 'raceIndexParserDB';
+  const DB_STORE = 'races';
+  const OLD_KEY = 'raceIndexParser.log.v1';
+  const MARK_CODE = ['', '◎', '◯', '▲', '🔺', '△', '▽', '⭐︎'];
+  // LENS_ORDER は上部で定義済みのものを使う
+
+  let dbPromise = null;
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((res, rej) => {
+      if (!window.indexedDB) { rej(new Error('IndexedDB が使えません')); return; }
+      const rq = indexedDB.open(DB_NAME, 1);
+      rq.onupgradeneeded = () => {
+        const db = rq.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, { keyPath: 'i' });
+      };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    });
+    return dbPromise;
+  }
+  function idbAll() {
+    return openDB().then(db => new Promise((res, rej) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const rq = tx.objectStore(DB_STORE).getAll();
+      rq.onsuccess = () => res(rq.result || []);
+      rq.onerror = () => rej(rq.error);
+    }));
+  }
+  function idbPut(recs) {
+    return openDB().then(db => new Promise((res, rej) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      const st = tx.objectStore(DB_STORE);
+      recs.forEach(r => st.put(r));
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    }));
+  }
+  function idbDelete(id) {
+    return openDB().then(db => new Promise((res, rej) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(id);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    }));
+  }
+  function idbDeleteMany(ids) {
+    return openDB().then(db => new Promise((res, rej) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      const st = tx.objectStore(DB_STORE);
+      ids.forEach(id => st.delete(id));
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    }));
+  }
+  function idbClear() {
+    return openDB().then(db => new Promise((res, rej) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).clear();
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    }));
+  }
+
+  const numOrNull = v => (v === null || v === undefined || (typeof v === 'number' && isNaN(v))) ? null : v;
+
+  function packRace(rec) {
+    const h = (rec.horses || []).map(x => {
+      const lens = x.lens || {};
+      const flags = (x.breakaway ? 1 : 0) | (x.grinder ? 2 : 0) | (x.promoted ? 4 : 0);
+      return [
+        x.n, x.name || '', Math.max(0, MARK_CODE.indexOf(x.mark || '')),
+        numOrNull(x.ninki), numOrNull(x.odds),
+        numOrNull(x.nearBest), numOrNull(x.prevIndex), numOrNull(x.avg5),
+        x.grindRuns || 0, flags,
+        ...LENS_ORDER.map(k => {
+          if (k === '近走最高') return numOrNull(lens[k] !== undefined ? lens[k] : x.near);
+          if (k === '基準走') return numOrNull(lens[k] !== undefined ? lens[k] : x.prev);
+          if (k === '5走平均') return numOrNull(lens[k] !== undefined ? lens[k] : x.avg);
+          return numOrNull(lens[k]);
+        }),
+        numOrNull(x.best), numOrNull(x.worst),
+      ];
+    });
+    const b = rec.bet || {};
+    return {
+      i: rec.id, d: rec.date || '', ve: rec.venue || '', rn: rec.raceNo || '',
+      rna: rec.raceName || '', rc: rec.raceClass || '',
+      su: rec.surface || '', di: rec.distance ? parseInt(rec.distance, 10) : null,
+      hc: rec.headCount || null, ci: rec.circuit || '',
+      sp: numOrNull(rec.spread), tg: numOrNull(rec.topGap), es: rec.est || '',
+      lg: rec.logic || 'v1', v3: rec.v3src || null,
+      bv: rec.baselineVenue || '', bd: rec.baselineDistance || null,
+      h, ax: b.axis === undefined ? null : b.axis, se: b.second || [], th: b.third || [],
+      tr: b.trio || [], r: [rec.result.p1, rec.result.p2, rec.result.p3], m: rec.memo || '',
+    };
+  }
+
+  function unpackRace(p) {
+    const horses = (p.h || []).map(a => {
+      const lens = {};
+      LENS_ORDER.forEach((k, i) => { if (a[10 + i] !== null && a[10 + i] !== undefined) lens[k] = a[10 + i]; });
+      return {
+        n: a[0], name: a[1], mark: MARK_CODE[a[2]] || '',
+        ninki: a[3], odds: a[4], nearBest: a[5], prevIndex: a[6], avg5: a[7],
+        grindRuns: a[8],
+        breakaway: !!(a[9] & 1), grinder: !!(a[9] & 2), promoted: !!(a[9] & 4),
+        near: lens['近走最高'] === undefined ? null : lens['近走最高'],
+        prev: lens['基準走'] === undefined ? null : lens['基準走'],
+        avg: lens['5走平均'] === undefined ? null : lens['5走平均'],
+        lens,
+        best: a[19] === undefined ? null : a[19], worst: a[20] === undefined ? null : a[20],
+      };
+    });
+    return {
+      id: p.i, date: p.d, venue: p.ve, raceNo: p.rn, raceName: p.rna, raceClass: p.rc,
+      surface: p.su, distance: p.di === null ? '' : String(p.di), headCount: p.hc,
+      circuit: p.ci, spread: p.sp, topGap: p.tg, est: p.es, logic: p.lg, v3src: p.v3,
+      baselineVenue: p.bv, baselineDistance: p.bd,
+      horses,
+      bet: { axis: p.ax, second: p.se || [], third: p.th || [], trio: p.tr || [] },
+      result: { p1: p.r[0], p2: p.r[1], p3: p.r[2] },
+      memo: p.m || '',
+    };
+  }
+
+  // メモリには圧縮形式のまま置く。集計のときだけ展開してキャッシュする。
+  let packedAll = [];
+  let unpackCache = null;
+  let storeReady = false;
+  let storeError = '';
+
+  function recLoad() { return unpackAll(); }
+  function unpackAll() {
+    if (unpackCache) return unpackCache;
+    unpackCache = packedAll.map(unpackRace);
+    return unpackCache;
+  }
+  function invalidate() { unpackCache = null; }
+
+  // 開催場ごとの保存上限。0 で無制限。古いものから消す。
+  const AUTOSAVE_KEY = 'raceIndexParser.autosave';
+  let autoSave = false;
+  try { if (localStorage.getItem(AUTOSAVE_KEY) === '1') autoSave = true; } catch (e) {}
+  const LOGIC_KEY = 'raceIndexParser.logic';
+  const LIMIT_KEY = 'raceIndexParser.limit';
+  let venueLimit = 500;
+  try {
+    const v = parseInt(localStorage.getItem(LIMIT_KEY), 10);
+    if (!isNaN(v) && v >= 0) venueLimit = v;
+  } catch (e) {}
+  function setVenueLimit(n) {
+    venueLimit = n;
+    try { localStorage.setItem(LIMIT_KEY, String(n)); } catch (e) {}
+  }
+  // 同じレースを同じ印の付け方で2回記録したものを重複とみなす。
+  // 印の付け方が違えば比較のために残す。
+  function dupKey(p) {
+    return [p.d || '', p.ve || '', p.rn || '', p.rna || '',
+            (p.r || []).join('-'), p.lg || ''].join('|');
+  }
+  function dupIds() {
+    const seen = new Map();
+    const dup = [];
+    // 後から記録した方を残す（訂正のため入れ直した場合に備える）
+    const sorted = packedAll.slice().sort((a, b) => String(a.i).localeCompare(String(b.i)));
+    sorted.forEach(p => { seen.set(dupKey(p), p.i); });
+    sorted.forEach(p => { if (seen.get(dupKey(p)) !== p.i) dup.push(p.i); });
+    return dup;
+  }
+  function trimDuplicates() {
+    const ids = dupIds();
+    if (!ids.length) return Promise.resolve(0);
+    const del = new Set(ids);
+    packedAll = packedAll.filter(x => !del.has(x.i));
+    invalidate();
+    return persist(() => idbDeleteMany(ids)).then(() => ids.length).catch(() => ids.length);
+  }
+
+  // 上限を超えた分を古い順に選ぶ（日付→追加順）
+  function overflowIds() {
+    if (!venueLimit) return [];
+    const byVenue = new Map();
+    packedAll.forEach(p => {
+      const k = p.ve || '（場なし）';
+      if (!byVenue.has(k)) byVenue.set(k, []);
+      byVenue.get(k).push(p);
+    });
+    const out = [];
+    byVenue.forEach(list => {
+      if (list.length <= venueLimit) return;
+      const sorted = list.slice().sort((a2, b2) =>
+        (a2.d || '').localeCompare(b2.d || '') || String(a2.i).localeCompare(String(b2.i)));
+      out.push(...sorted.slice(0, list.length - venueLimit).map(x => x.i));
+    });
+    return out;
+  }
+  function trimOverflow() {
+    const ids = overflowIds();
+    if (!ids.length) return Promise.resolve(0);
+    const del = new Set(ids);
+    packedAll = packedAll.filter(x => !del.has(x.i));
+    invalidate();
+    return persist(() => idbDeleteMany(ids))
+      .then(() => ids.length).catch(() => ids.length);
+  }
+
+  function recAdd(rec) {
+    const p = packRace(rec);
+    packedAll.push(p);
+    invalidate();
+    return persist(() => idbPut([p]))
+      .then(() => trimDuplicates())
+      .then(() => trimOverflow())
+      .then(() => true).catch(() => false);
+  }
+  function recRemove(id) {
+    packedAll = packedAll.filter(x => x.i !== id);
+    invalidate();
+    return persist(() => idbDelete(id)).then(() => true).catch(() => false);
+  }
+  function recClearAll() {
+    packedAll = [];
+    invalidate();
+    return persist(() => idbClear()).then(() => true).catch(() => false);
+  }
+  function recUpdate(id, fn) {
+    const i = packedAll.findIndex(x => x.i === id);
+    if (i < 0) return Promise.resolve(false);
+    fn(packedAll[i]);
+    invalidate();
+    return persist(() => idbPut([packedAll[i]])).then(() => true).catch(() => false);
+  }
+
+  // 書き出したファイル/文字列を取り込む。旧形式(キー付き)と新形式(配列)の両方を受ける。
+  function importRecords(arr) {
+    const have = new Set(packedAll.map(x => x.i));
+    const add = [];
+    arr.forEach(x => {
+      if (!x) return;
+      const p = (x.i !== undefined) ? x : (x.id !== undefined ? packRace(x) : null);
+      if (!p || !p.i || have.has(p.i)) return;
+      have.add(p.i); add.push(p);
+    });
+    if (!add.length) return Promise.resolve(0);
+    packedAll = packedAll.concat(add);
+    invalidate();
+    return persist(() => idbPut(add))
+      .then(ok => (ok === false ? -1 : trimDuplicates().then(() => add.length)))
+      .catch(() => -1);
+  }
+
+  // IndexedDB が使えない環境では localStorage に落とす（容量は小さい）
+  const LS_KEY = 'raceIndexParser.packed.v3';
+  let useLS = false;
+  function lsSave() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(packedAll)); return true; }
+    catch (e) { return false; }
+  }
+  function persist(op) {
+    if (useLS) return Promise.resolve(lsSave());
+    return op().catch(() => { useLS = true; return lsSave(); });
+  }
+
+  // 起動時: IndexedDB を読み、古い localStorage があれば取り込む。
+  // 取り込み元は絶対に消さない（消すと復旧できないため）。
+  let loadReport = '';
+  function initStore() {
+    let fromIdb = 0, fromOld = 0, fromLs = 0;
+    return idbAll().catch(() => {
+      useLS = true;
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        const v = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(v)) { fromLs = v.length; return v; }
+      } catch (e) {}
+      return [];
+    }).then(rows => {
+      packedAll = rows;
+      fromIdb = useLS ? 0 : rows.length;
+      invalidate();
+      let old = [];
+      try {
+        const raw = localStorage.getItem(OLD_KEY);
+        if (raw) { const v = JSON.parse(raw); if (Array.isArray(v)) old = v; }
+      } catch (e) { old = []; }
+      if (!old.length) { storeReady = true; return; }
+      const have = new Set(packedAll.map(x => x.i));
+      const add = [];
+      old.forEach(x => {
+        if (!x || !x.id || have.has(x.id)) return;
+        try { add.push(packRace(x)); have.add(x.id); } catch (e) {}
+      });
+      fromOld = add.length;
+      if (!add.length) { storeReady = true; return; }
+      packedAll = packedAll.concat(add);
+      invalidate();
+      return persist(() => idbPut(add)).then(() => { storeReady = true; });
+    }).then(() => {
+      const parts = [];
+      if (fromIdb) parts.push(`保存領域から${fromIdb}件`);
+      if (fromLs) parts.push(`予備の保存先から${fromLs}件`);
+      if (fromOld) parts.push(`古い形式から${fromOld}件を取り込み`);
+      loadReport = parts.length ? parts.join(' / ') : '';
+    }).catch(err => {
+      storeError = String(err && err.message ? err.message : err);
+      storeReady = false;
+      loadReport = '読み込みに失敗しました';
+    });
+  }
+
+  // いま端末のどこに何件あるかを調べる
+  function diagnose() {
+    const out = [];
+    out.push(`いま使っている記録：${packedAll.length}件`);
+    out.push(`読み込み元：${loadReport || '－'}`);
+    try {
+      const raw = localStorage.getItem(OLD_KEY);
+      const v = raw ? JSON.parse(raw) : null;
+      out.push(`古い形式の保存：${Array.isArray(v) ? v.length + '件' : 'なし'}`);
+    } catch (e) { out.push('古い形式の保存：読めません'); }
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      const v = raw ? JSON.parse(raw) : null;
+      out.push(`予備の保存：${Array.isArray(v) ? v.length + '件' : 'なし'}`);
+    } catch (e) { out.push('予備の保存：読めません'); }
+    return idbAll().then(rows => {
+      out.push(`保存領域（IndexedDB）：${rows.length}件`);
+      return out;
+    }).catch(e => {
+      out.push('保存領域（IndexedDB）：使えません');
+      return out;
+    });
+  }
+
+  // パース済みのデータと入力された着順から、記録1件分を組み立てる
+  function buildRecord(res, dateStr, memo, venueIn) {
+    const r = getMarks(lastResult.horses, currentBaseline, lastResult.meta);
+    if (!r || !r.rows.length) return null;
+    const rr = r.rankRecord || new Map();
+    const markOf = new Map(r.rows.map(x => [x.horse.number, x.mark]));
+    const promotedNums = new Set((r.promoted || []).map(x => x.row.horse.number));
+    const bw = r.breakawayNums || new Set();
+    const gr = r.grinderNums || new Set();
+    const horses = lastResult.horses.map(h => {
+      const q = rr.get(h.number) || {};
+      return {
+        n: h.number, name: h.name, mark: markOf.get(h.number) || '',
+        ninki: isNaN(h.ninki) ? null : h.ninki,
+        odds: isNaN(h.odds) ? null : h.odds,
+        near: q.near === undefined ? null : q.near,
+        prev: q.prev === undefined ? null : q.prev,
+        avg: q.avg === undefined ? null : q.avg,
+        best: q.best === undefined ? null : q.best,
+        worst: q.worst === undefined ? null : q.worst,
+        nearBest: q.nearBest === undefined ? null : q.nearBest,
+        prevIndex: q.prevIndex === undefined ? null : q.prevIndex,
+        avg5: q.avg5 === undefined ? null : q.avg5,
+        grindRuns: q.grindRuns || 0,
+        // 全物差しの順位。印に使っていないものも残す
+        lens: (q.lens || []).reduce((o, v) => { o[v.key] = v.rank; return o; }, {}),
+        breakaway: bw.has(h.number),
+        grinder: gr.has(h.number),
+        promoted: promotedNums.has(h.number),
+      };
+    });
+    const axis = r.rows[0].horse.number;
+    const rest = r.rows.slice(1);
+    const second = rest.slice(0, SECOND_PICK).map(x => x.horse.number);
+    const third = rest.map(x => x.horse.number);
+    const trio = new Set();
+    second.forEach(a => third.forEach(b => {
+      if (a !== b) trio.add([a, b].sort((x, y) => x - y).join('-'));
+    }));
+    const m = lastResult.meta || {};
+    // 指数の幅(そのレースの近走最高指数の散らばり)。層別に使う。
+    const nb = horses.map(h => h.nearBest).filter(v => v !== null && v !== undefined)
+      .sort((a2, b2) => b2 - a2);
+    const spread = nb.length >= 2 ? (nb[0] - nb[nb.length - 1]) : null;
+    const topGap = nb.length >= 2 ? (nb[0] - nb[1]) : null;
+    return {
+      v: 2,
+      circuit: currentCircuit,
+      raceClass: m.raceClass || '',
+      spread, topGap,
+      id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      date: dateStr,
+      venue: (venueIn || m.venue || ''), raceNo: m.raceNo || '',
+      raceName: m.raceName || m.raceClass || '',
+      headCount: m.headCount ? parseInt(m.headCount, 10) : lastResult.horses.length,
+      surface: m.surface || '', distance: m.distance || '',
+      baselineVenue: currentBaseline.venue || '',
+      baselineDistance: currentBaseline.distance || null,
+      est: r.est || '',
+      logic: markLogic,
+      v3src: (markLogic === 'v3' && v3Info) ? { src: v3Info.src, races: v3Info.races } : null,
+      horses,
+      bet: { axis, second, third, trio: [...trio] },
+      result: res,
+      memo: memo || '',
+    };
+  }
+
+  function inTop3(rec, num) {
+    return num === rec.result.p1 || num === rec.result.p2 || num === rec.result.p3;
+  }
+  function trioHit(rec) {
+    const p = [rec.result.p1, rec.result.p2, rec.result.p3];
+    if (p.some(v => !v)) return false;
+    if (!rec.bet || !rec.bet.trio) return false;
+    if (!p.includes(rec.bet.axis)) return false;
+    const others = p.filter(v => v !== rec.bet.axis).sort((a, b) => a - b);
+    if (others.length !== 2) return false;
+    return rec.bet.trio.includes(others.join('-'));
+  }
+
+  // 率の表示。母数が10未満のときは薄く出す(その率で判断できないため)
+  function rateCell(hit, n) {
+    if (!n) return '<td class="stat-n">－</td>';
+    const pct = Math.round(hit / n * 1000) / 10;
+    const thin = n < 10 ? ' stat-n' : '';
+    return `<td class="${thin}"><b>${pct}%</b></td>`;
+  }
+  function statRow(label, hit, n, win) {
+    return `<tr><td>${label}</td><td class="stat-n">${n}</td><td>${hit}</td>` +
+      rateCell(hit, n) + (win === undefined ? '' : `<td class="stat-n">${win}</td>`) + `</tr>`;
+  }
+
+  // ---- 層別のフィルタ ----
+  // レース条件はレースごとに違うので、条件を揃えないと物差しの良し悪しは比べられない。
+  const recFilter = { circuit: '', head: '', surface: '', dist: '', spread: '', venue: '', logic: '' };
+  const HEAD_BANDS = [['9頭以下', n => n <= 9], ['10-12頭', n => n >= 10 && n <= 12],
+                      ['13-15頭', n => n >= 13 && n <= 15], ['16頭以上', n => n >= 16]];
+  const DIST_BANDS = [['1400m以下', d => d <= 1400], ['1401-1800m', d => d > 1400 && d <= 1800],
+                      ['1801m以上', d => d > 1800]];
+  const SPREAD_BANDS = [['狭い(10以下)', v => v <= 10], ['普通(11-25)', v => v > 10 && v <= 25],
+                        ['広い(26以上)', v => v > 25]];
+
+  function recMatch(rec) {
+    const f = recFilter;
+    if (f.circuit && (rec.circuit || '') !== f.circuit) return false;
+    if (f.logic && (rec.logic || 'v1') !== f.logic) return false;
+    if (f.venue && (rec.venue || '') !== f.venue) return false;
+    if (f.surface && (rec.surface || '') !== f.surface) return false;
+    if (f.head) {
+      const band = HEAD_BANDS.find(b => b[0] === f.head);
+      if (!band || !rec.headCount || !band[1](rec.headCount)) return false;
+    }
+    if (f.dist) {
+      const d = parseInt(rec.distance, 10);
+      const band = DIST_BANDS.find(b => b[0] === f.dist);
+      if (!band || isNaN(d) || !band[1](d)) return false;
+    }
+    if (f.spread) {
+      const band = SPREAD_BANDS.find(b => b[0] === f.spread);
+      if (!band || rec.spread === null || rec.spread === undefined || !band[1](rec.spread)) return false;
+    }
+    return true;
+  }
+
+  // 印に使っている物差しと、使っていない物差し。「人気」は比較の基準。
+  const LENS_DEF = [
+    ['最良順位', h => h.best, 1],
+    ['近走最高', h => (h.lens && h.lens['近走最高'] !== undefined) ? h.lens['近走最高'] : h.near, 1],
+    ['基準走', h => (h.lens && h.lens['基準走'] !== undefined) ? h.lens['基準走'] : h.prev, 1],
+    ['5走平均', h => (h.lens && h.lens['5走平均'] !== undefined) ? h.lens['5走平均'] : h.avg, 1],
+    ['同コース×同距離', h => h.lens ? h.lens['同コース×同距離'] : null, 0],
+    ['同距離最高', h => h.lens ? h.lens['同距離最高'] : null, 0],
+    ['同コース最高', h => h.lens ? h.lens['同コース最高'] : null, 0],
+    ['想定ペース最高', h => h.lens ? h.lens['想定ペース最高'] : null, 0],
+    ['前走馬場', h => h.lens ? h.lens['前走馬場'] : null, 0],
+    ['人気乖離', h => h.lens ? h.lens['人気乖離'] : null, 0],
+    ['人気', h => h.ninki, 2],
+  ];
+  const USE_LABEL = {
+    1: '<span class="lens-use">印に使用</span>',
+    0: '<span class="lens-nouse">未使用</span>',
+    2: '<span class="lens-base">基準</span>',
+  };
+
+  // あるレース群について、物差しごとに「上位3頭で3着内を何頭拾えたか」を出す
+  function computeLensCover(races) {
+    const out = LENS_DEF.map(() => ({ got: 0, races: 0, picked: 0 }));
+    races.forEach(rec => {
+      const top3 = [rec.result.p1, rec.result.p2, rec.result.p3];
+      LENS_DEF.forEach((L, li) => {
+        const withRank = (rec.horses || [])
+          .map(h => ({ n: h.n, r: L[1](h) }))
+          .filter(x => x.r !== null && x.r !== undefined && !isNaN(x.r));
+        if (!withRank.length) return;
+        const picked = withRank.filter(x => x.r <= 3).map(x => x.n);
+        if (!picked.length) return;
+        out[li].races++;
+        out[li].picked += picked.length;
+        out[li].got += top3.filter(v => picked.includes(v)).length;
+      });
+    });
+    return out;
+  }
+  // いまの印が3着内を何頭拾えたか
+  function computeMarkCover(races) {
+    let got = 0;
+    races.forEach(rec => {
+      const marked = new Set((rec.horses || []).filter(h => h.mark).map(h => h.n));
+      got += [rec.result.p1, rec.result.p2, rec.result.p3].filter(v => marked.has(v)).length;
+    });
+    return { got, all: races.length * 3 };
+  }
+
+  // ---- 条件ごとの比較 ----
+  // 場・距離・頭数などで分けて、それぞれ何が来ているかを並べる。
+  let recAxis = 'venue';
+  const AXES = {
+    venue: { label: '開催場', groups: all => [...new Set(all.map(r => r.venue).filter(Boolean))].sort()
+             .map(v => [v, r => r.venue === v]) },
+    circuit: { label: '中央・地方', groups: () => [['中央', r => r.circuit === 'jra'], ['地方', r => r.circuit === 'nar']] },
+    surface: { label: '芝・ダ', groups: () => [['芝', r => r.surface === '芝'], ['ダート', r => r.surface === 'ダ']] },
+    head: { label: '頭数', groups: () => HEAD_BANDS.map(b => [b[0], r => r.headCount && b[1](r.headCount)]) },
+    dist: { label: '距離', groups: () => DIST_BANDS.map(b => [b[0], r => { const d = parseInt(r.distance, 10); return !isNaN(d) && b[1](d); }]) },
+    spread: { label: '指数の幅', groups: () => SPREAD_BANDS.map(b => [b[0], r => r.spread !== null && r.spread !== undefined && b[1](r.spread)]) },
+    venueDist: { label: '開催場×距離', groups: all => {
+      const keys = [...new Set(all.filter(r => r.venue && r.distance).map(r => r.venue + ' ' + r.distance + 'm'))].sort();
+      return keys.map(k => [k, r => (r.venue + ' ' + r.distance + 'm') === k]);
+    } },
+  };
+  const MIN_JUDGE = 10; // これ未満のレース数では判断しない
+
+  function renderRecByCondition(all) {
+    const axis = AXES[recAxis];
+    const groups = axis.groups(all);
+    const pct = (h, n) => n ? (Math.round(h / n * 1000) / 10) + '%' : '－';
+    const sel = `<select class="rec-sel" data-axis="1">` +
+      Object.keys(AXES).map(k => `<option value="${k}"${k === recAxis ? ' selected' : ''}>${AXES[k].label}</option>`).join('') +
+      `</select>`;
+    const cards = groups.map(([name, test]) => {
+      const races = all.filter(test);
+      if (!races.length) return null;
+      const cov = computeLensCover(races);
+      const mk = computeMarkCover(races);
+      // 並べ替えは「選んだ馬の3着内率」。カバー率で並べると、
+      // 同順位で多く選んだ物差しが自動的に上に来てしまい比較にならない。
+      const rows = LENS_DEF.map((L, li) => {
+        const v = cov[li];
+        if (!v.races || !v.picked) return null;
+        return { name: L[0], use: L[2], v, rate: v.got / v.picked, cover: v.got / (v.races * 3) };
+      }).filter(Boolean).sort((a2, b2) => b2.rate - a2.rate);
+      const enough = races.length >= MIN_JUDGE;
+      const lines = rows.map((x, i) => {
+        return `<div class="cond-line${i === 0 ? ' is-top' : ''}">
+          <span class="cond-name">${x.name}${x.use === 1 ? '<span class="lens-use">使用</span>' : x.use === 0 ? '<span class="lens-nouse">未使用</span>' : ''}</span>
+          <span class="cond-rate">${pct(x.v.got, x.v.picked)}</span>
+          <span class="cond-n">${x.v.got}/${x.v.picked}頭<br>拾い${pct(x.v.got, x.v.races * 3)}</span>
+        </div>`;
+      }).join('');
+      return { html: `<details class="cond-card${enough ? '' : ' is-thin'}" OPENFLAG>
+        <summary class="cond-head">${escapeHtml(name)}<span class="cond-races">${races.length}レース</span></summary>
+        ${enough ? '' : `<div class="cond-warn">${MIN_JUDGE}レースに届いていないため、まだ判断できません。</div>`}
+        <div class="cond-mark">いまの印：3着内 ${mk.got}/${mk.all}（${pct(mk.got, mk.all)}）</div>
+        ${lines}
+      </details>`, n: races.length };
+    }).filter(Boolean)
+      .map((x, i) => (typeof x === 'string' ? x : x.html.replace('OPENFLAG', i === 0 ? 'open' : '')))
+      .join('');
+    return `<div class="rec-block">
+      <div class="rec-block-t">条件ごとに何が来ているか</div>
+      <div class="rec-filter"><div><span>分け方</span>${sel}</div></div>
+      <p class="rec-note">左の％は<b>選んだ馬のうち3着内に来た割合</b>です。同順位があるため物差しごとに選ぶ頭数が違うので、この率で比べます。右下の「拾い」は3着内3頭のうち何頭を拾えたか。</p>
+      ${cards || '<div class="rec-empty">この分け方では区分がありません。</div>'}
+    </div>`;
+  }
+
+
+  // ===== 印から漏れて3着内に来た馬の分析 =====
+  // 危険・候補は保存値ではなく、記録済みの順位から再現する(古い記録でも使えるように)。
+  const MISS_TOP = 7;
+  function lensRanksOf(h) {
+    return [h.near, h.prev, h.avg].filter(r => r !== null && r !== undefined && !isNaN(r));
+  }
+  function isDangerHorse(h) {
+    const rs = lensRanksOf(h);
+    if (!rs.length) return false;
+    return rs.every(r => r > MISS_TOP);
+  }
+
+  let missGroup = 'venue';   // 括り方
+  let missThreshold = 3;     // 何位までを取ると仮定するか
+  const MISS_GROUPS = {
+    all: { label: '全部まとめて', key: () => 'すべて' },
+    venue: { label: '開催場', key: r => r.venue || '（場なし）' },
+    venueDist: { label: '開催場×距離帯', key: r => {
+      const d = parseInt(r.distance, 10);
+      const b = DIST_BANDS.find(x => !isNaN(d) && x[1](d));
+      return (r.venue || '（場なし）') + ' ' + (b ? b[0] : '距離不明');
+    } },
+    venueHead: { label: '開催場×頭数帯', key: r => {
+      const b = HEAD_BANDS.find(x => r.headCount && x[1](r.headCount));
+      return (r.venue || '（場なし）') + ' ' + (b ? b[0] : '頭数不明');
+    } },
+  };
+
+  // 1レース分を調べる
+  function analyzeRace(rec) {
+    const top3 = [rec.result.p1, rec.result.p2, rec.result.p3];
+    const horses = rec.horses || [];
+    const marked = horses.filter(h => h.mark);
+    const markedNums = new Set(marked.map(h => h.n));
+    const missed = horses.filter(h => !h.mark && top3.includes(h.n));
+    const axis = rec.bet ? rec.bet.axis : null;
+    const axisIn = axis !== null && top3.includes(axis);
+    const allCovered = top3.every(v => markedNums.has(v));
+    const hit = trioHit(rec);
+    // 買い目の切り分け
+    let cause;
+    if (!axisIn) cause = 'axis';               // ◎が3着内に来ていない
+    else if (!allCovered) cause = 'miss';      // 印から漏れた馬が3着内にいる
+    else if (!hit) cause = 'bet';              // 印は全部拾えたのに買い目で外した
+    else cause = 'hit';
+    // 印は全部拾えたのに外した場合、◎以外の2頭が何番目の印だったか
+    let betPos = null;
+    if (cause === 'bet') {
+      const order = MARK_LIST.filter(m => marked.some(h => h.mark === m));
+      betPos = top3.filter(v => v !== axis).map(v => {
+        const h = horses.find(x => x.n === v);
+        return h ? h.mark : '?';
+      });
+    }
+    return { rec, top3, horses, markedNums, missed, cause, betPos };
+  }
+
+  // 「この物差しの◯位まで取っていたら」を試す
+  function trySwap(races, lensIdx, th) {
+    let rescued = 0, added = 0, missTotal = 0;
+    races.forEach(({ rec, top3, horses, markedNums, missed }) => {
+      missTotal += missed.length;
+      const L = LENS_DEF[lensIdx];
+      horses.forEach(h => {
+        if (markedNums.has(h.n)) return;
+        const r = L[1](h);
+        if (r === null || r === undefined || isNaN(r) || r > th) return;
+        added++;
+        if (top3.includes(h.n)) rescued++;
+      });
+    });
+    return { rescued, added, missTotal };
+  }
+
+
+  // 記録から「入れた方がいいかも（候補）」を再現する。
+  // 保存していなくても全馬の順位が入っているので、あとから計算できる。
+  function pickupOfRecord(rec) {
+    const horses = rec.horses || [];
+    const marked = new Set(horses.filter(h => h.mark).map(h => h.n));
+    const rk = (h, key) => {
+      if (key === '最良順位') return (h.best === null || h.best === undefined) ? null : h.best;
+      return (h.lens && h.lens[key] !== undefined && h.lens[key] !== null) ? h.lens[key] : null;
+    };
+    const out = [];
+    const taken = new Set();
+    V2_RULES.forEach(rule => {
+      if (out.length >= 3) return;
+      const cand = horses.filter(h => {
+        if (marked.has(h.n) || taken.has(h.n)) return false;
+        const r = rk(h, rule.key);
+        return r !== null && r >= rule.lo && r <= rule.hi;
+      }).sort((a, b) => {
+        const ra = rk(a, rule.key), rb = rk(b, rule.key);
+        if (ra !== rb) return ra - rb;
+        const ao = (a.odds === null || a.odds === undefined) ? -1 : a.odds;
+        const bo = (b.odds === null || b.odds === undefined) ? -1 : b.odds;
+        return bo - ao;
+      });
+      for (const h of cand) {
+        if (out.length >= 3) break;
+        taken.add(h.n);
+        out.push({ ...h, why: `${rule.key}${rule.lo === rule.hi ? rule.lo + '位' : rule.lo + '-' + rule.hi + '位'}` });
+      }
+    });
+    return out;
+  }
+
+  function renderPickupStats(list) {
+    if (!list.length) return '';
+    const pct = (h, n) => n ? (Math.round(h / n * 1000) / 10) + '%' : '－';
+    const slots = [{ n: 0, hit: 0, win: 0 }, { n: 0, hit: 0, win: 0 }, { n: 0, hit: 0, win: 0 }];
+    let allN = 0, allHit = 0, allWin = 0;
+    const cases = [];
+    // 印の最下位（いちばん後ろの印）との比較用
+    const lastMark = { n: 0, hit: 0, win: 0 };
+    list.forEach(rec => {
+      const top3 = [rec.result.p1, rec.result.p2, rec.result.p3];
+      const pk = pickupOfRecord(rec);
+      pk.forEach((h, i) => {
+        const t = top3.includes(h.n) ? 1 : 0;
+        const w = (h.n === rec.result.p1) ? 1 : 0;
+        if (i < 3) { slots[i].n++; slots[i].hit += t; slots[i].win += w; }
+        allN++; allHit += t; allWin += w;
+        if (t) cases.push({ rec, h, place: top3.indexOf(h.n) + 1, slot: i + 1 });
+      });
+      const marks = (rec.horses || []).filter(h => h.mark);
+      if (marks.length) {
+        const order = MARK_LIST.filter(m => marks.some(h => h.mark === m));
+        const lastM = order[order.length - 1];
+        const lh = marks.find(h => h.mark === lastM);
+        if (lh) {
+          lastMark.n++;
+          if (top3.includes(lh.n)) lastMark.hit++;
+          if (lh.n === rec.result.p1) lastMark.win++;
+        }
+      }
+    });
+    if (!allN) return '';
+    const CASE_SHOW = 50;
+    const caseLines = cases.slice(-CASE_SHOW).reverse().map(c => `<div class="miss-line">
+      <span class="miss-h">${c.place}着 ${c.h.n}番 ${escapeHtml(c.h.name)}</span>
+      <span class="miss-tag">候補${c.slot}番目${c.h.ninki ? '・' + c.h.ninki + '人気' : ''}${c.h.why ? '・' + escapeHtml(c.h.why) : ''}</span>
+      <span class="miss-race">${escapeHtml([c.rec.venue, c.rec.distance ? c.rec.distance + 'm' : '', c.rec.headCount ? c.rec.headCount + '頭' : ''].filter(Boolean).join(' '))}</span>
+    </div>`).join('');
+    return `<div class="rec-block">
+      <div class="rec-block-t">「入れた方がいいかも」の馬はどうだったか</div>
+      <table class="stat-t">
+        <tr><th>区分</th><th>頭数</th><th>3着内</th><th>3着内率</th><th>1着</th></tr>
+        ${slots.map((v, i) => v.n ? statRow('候補' + (i + 1) + '番目', v.hit, v.n, v.win) : '').join('')}
+        ${statRow('候補ぜんぶ', allHit, allN, allWin)}
+        ${lastMark.n ? statRow('比較：印のいちばん下', lastMark.hit, lastMark.n, lastMark.win) : ''}
+      </table>
+      <p class="rec-note">候補は<b>印の次点</b>です。印と同じ優先リスト（実測順の18条件）を続けて適用し、枠から溢れた上位3頭を取っています。記録した順位から計算しているので、過去の記録にもさかのぼって出ます。<b>候補1番目が印のいちばん下より3着内率が高いなら、そこは入れ替えるべきです。</b></p>
+      ${cases.length ? `<details class="fold-sub"><summary>実際に3着内に来た候補（${cases.length}頭${cases.length > CASE_SHOW ? ' / 新しい' + CASE_SHOW + '頭を表示' : ''}）</summary>${caseLines}</details>` : '<div class="rec-empty">候補から3着内に来た馬はいません。</div>'}
+    </div>`;
+  }
+
+  function renderMissAnalysis(all) {
+    if (!all.length) return '';
+    const races = all.map(analyzeRace);
+    const pct = (h, n) => n ? (Math.round(h / n * 1000) / 10) + '%' : '－';
+
+    // ---- 買い目の切り分け ----
+    const cnt = { hit: 0, axis: 0, miss: 0, bet: 0 };
+    const betDetail = [];
+    races.forEach(x => {
+      cnt[x.cause]++;
+      if (x.cause === 'bet') betDetail.push({ rec: x.rec, pos: x.betPos });
+    });
+    const BET_SHOW = 50;
+    const betLines = betDetail.slice(-BET_SHOW).reverse().map(x =>
+      `<div class="miss-line">${escapeHtml([x.rec.venue, x.rec.raceNo ? x.rec.raceNo + 'R' : '', x.rec.raceName].filter(Boolean).join(' '))}
+        <span class="miss-tag">残り2頭の印：${x.pos.join('・')}</span></div>`).join('');
+
+    // ---- 括りごとの漏れ馬 ----
+    const groups = new Map();
+    races.forEach(x => {
+      const k = MISS_GROUPS[missGroup].key(x.rec);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(x);
+    });
+
+    const gsel = `<select class="rec-sel" data-miss="group">` +
+      Object.keys(MISS_GROUPS).map(k =>
+        `<option value="${k}"${k === missGroup ? ' selected' : ''}>${MISS_GROUPS[k].label}</option>`).join('') +
+      `</select>`;
+    const tsel = `<select class="rec-sel" data-miss="th">` +
+      [1, 2, 3, 4, 5].map(v =>
+        `<option value="${v}"${v === missThreshold ? ' selected' : ''}>${v}位まで</option>`).join('') +
+      `</select>`;
+
+    const cards = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([name, rs]) => {
+      const missed = [];
+      rs.forEach(x => x.missed.forEach(h => missed.push({ rec: x.rec, h, place: x.top3.indexOf(h.n) + 1 })));
+      missed.reverse();
+      // 漏れ馬の一覧
+      const MISS_SHOW = 50;
+      const missLines = missed.slice(0, MISS_SHOW).map(m => {
+        const rk = LENS_DEF.map(L => {
+          const r = L[1](m.h);
+          return (r === null || r === undefined || isNaN(r)) ? null : { name: L[0], r };
+        }).filter(Boolean).sort((a, b) => a.r - b.r);
+        const bestTxt = rk.length ? rk.slice(0, 3).map(v => `${v.name}${v.r}位`).join('・') : '順位なし';
+        const danger = isDangerHorse(m.h) ? '<span class="miss-danger">危険で除外</span>' : '';
+        return `<div class="miss-line">
+          <span class="miss-h">${m.place}着 ${m.h.n}番 ${escapeHtml(m.h.name)}</span>
+          <span class="miss-tag">${bestTxt}</span>${danger}
+          <span class="miss-race">${escapeHtml([m.rec.venue, m.rec.distance ? m.rec.distance + 'm' : '', m.rec.headCount ? m.rec.headCount + '頭' : ''].filter(Boolean).join(' '))}</span>
+        </div>`;
+      }).join('');
+      // どの物差しを足せば拾えたか
+      const swaps = LENS_DEF.map((L, li) => {
+        const t = trySwap(rs, li, missThreshold);
+        return { name: L[0], use: L[2], ...t };
+      }).filter(x => x.added > 0)
+        .sort((a, b) => (b.rescued - a.rescued) || (a.added - b.added));
+      const swapRows = swaps.map(x => `<tr>
+        <td>${x.name}${x.use === 1 ? '<span class="lens-use">使用</span>' : x.use === 0 ? '<span class="lens-nouse">未使用</span>' : ''}</td>
+        <td><b>${x.rescued}</b>/${x.missTotal}</td>
+        <td class="stat-n">+${x.added}</td>
+        <td class="stat-n">${x.added ? (Math.round(x.rescued / x.added * 1000) / 10) + '%' : '－'}</td>
+      </tr>`).join('');
+      return `<div class="cond-card">
+        <div class="cond-head">${escapeHtml(name)}<span class="cond-races">${rs.length}レース</span></div>
+        <div class="cond-mark">3着内で印から漏れた馬：<b>${missed.length}頭</b>（延べ${rs.length * 3}頭中）</div>
+        ${missed.length ? `<details class="fold-sub"><summary>漏れた馬を見る（${missed.length}頭${missed.length > MISS_SHOW ? ' / 新しい' + MISS_SHOW + '頭を表示' : ''}）</summary>${missLines}</details>` : '<div class="rec-empty">漏れはありません。</div>'}
+        <div class="miss-sub">${missThreshold}位までを追加で取った場合</div>
+        <table class="stat-t">
+          <tr><th>物差し</th><th>拾えた</th><th>増える頭数</th><th>効率</th></tr>
+          ${swapRows || '<tr><td colspan="4" class="stat-n">該当なし</td></tr>'}
+        </table>
+      </div>`;
+    }).join('');
+
+    return `<div class="rec-block">
+      <div class="rec-block-t">なぜ当たらなかったか（${all.length}レース）</div>
+      <table class="stat-t">
+        <tr><th>内訳</th><th>レース</th><th>割合</th></tr>
+        <tr><td>三連複的中</td><td>${cnt.hit}</td><td><b>${pct(cnt.hit, all.length)}</b></td></tr>
+        <tr><td>◎が3着内に来ていない</td><td>${cnt.axis}</td><td>${pct(cnt.axis, all.length)}</td></tr>
+        <tr><td>3着内に印なしの馬がいた<br><span class="stat-n">＝印の漏れ</span></td><td>${cnt.miss}</td><td>${pct(cnt.miss, all.length)}</td></tr>
+        <tr><td>3着内は全部印だったのに外した<br><span class="stat-n">＝買い目の問題</span></td><td>${cnt.bet}</td><td>${pct(cnt.bet, all.length)}</td></tr>
+      </table>
+      ${betDetail.length ? `<details class="fold-sub"><summary>買い目で落としたレースを見る（${betDetail.length}件${betDetail.length > BET_SHOW ? ' / 新しい' + BET_SHOW + '件を表示' : ''}）</summary>${betLines}</details>` : ''}
+    </div>
+    <div class="rec-block">
+      <div class="rec-block-t">漏れた馬は何で拾えたか</div>
+      <div class="rec-filter">
+        <div><span>括り方</span>${gsel}</div>
+        <div><span>取る範囲</span>${tsel}</div>
+      </div>
+      <p class="rec-note">「拾えた」は漏れた馬のうち何頭を拾い直せたか、「増える頭数」はそのとき印に加わる馬の総数、「効率」は加えた馬のうち3着内だった割合です。</p>
+      ${cards}
+    </div>`;
+  }
+
+  function renderRecFilter(list) {
+    const all = recLoad();
+    const venues = [...new Set(all.map(r => r.venue).filter(Boolean))].sort();
+    const opt = (v, cur, label) => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(label || v || '全部')}</option>`;
+    const sel = (id, cur, items) =>
+      `<select class="rec-sel" data-f="${id}">${opt('', cur, '全部')}${items.map(v => opt(v, cur)).join('')}</select>`;
+    return `<div class="rec-block">
+      <div class="rec-block-t">条件でしぼる（${list.length}／${all.length}レース）</div>
+      <div class="rec-filter">
+        <div><span>主催</span><select class="rec-sel" data-f="circuit">
+          <option value=""${recFilter.circuit === '' ? ' selected' : ''}>全部</option>
+          <option value="jra"${recFilter.circuit === 'jra' ? ' selected' : ''}>中央</option>
+          <option value="nar"${recFilter.circuit === 'nar' ? ' selected' : ''}>地方</option>
+        </select></div>
+        <div><span>開催場</span>${sel('venue', recFilter.venue, venues)}</div>
+        <div><span>芝ダ</span>${sel('surface', recFilter.surface, ['芝', 'ダ'])}</div>
+        <div><span>頭数</span>${sel('head', recFilter.head, HEAD_BANDS.map(b => b[0]))}</div>
+        <div><span>距離</span>${sel('dist', recFilter.dist, DIST_BANDS.map(b => b[0]))}</div>
+        <div><span>指数の幅</span>${sel('spread', recFilter.spread, SPREAD_BANDS.map(b => b[0]))}</div>
+        <div><span>印の付け方</span><select class="rec-sel" data-f="logic">
+          <option value=""${recFilter.logic === '' ? ' selected' : ''}>全部</option>
+          <option value="v1"${recFilter.logic === 'v1' ? ' selected' : ''}>いままで</option>
+          <option value="v2"${recFilter.logic === 'v2' ? ' selected' : ''}>手で書いた並び</option>
+          <option value="v3"${recFilter.logic === 'v3' ? ' selected' : ''}>記録から自動</option>
+        </select></div>
+      </div>
+      <p class="rec-note">指数の幅は、そのレースの近走最高指数の「最大－最小」です。幅が狭いレースと広いレースでは、指数で切れるかどうかが変わります。</p>
+    </div>`;
+  }
+
+  function renderRecStats() {
+    const all = recLoad();
+    if (!all.length) {
+      recStatsArea.innerHTML = `<div class="rec-block"><div class="rec-block-t">集計</div>
+        <div class="rec-empty">記録がまだありません。</div></div>`;
+      return;
+    }
+    const list = all.filter(recMatch);
+    const filterHtml = renderRecFilter(list);
+    if (!list.length) {
+      recStatsArea.innerHTML = filterHtml +
+        `<div class="rec-block"><div class="rec-empty">この条件に合う記録がありません。</div></div>`;
+      return;
+    }
+
+    const pct = (h, n) => n ? (Math.round(h / n * 1000) / 10) + '%' : '－';
+
+    // ---- 1. 印で3着内を何頭拾えたか ----
+    const cover = [0, 0, 0, 0];
+    let coverHit = 0, trioOK = 0;
+    list.forEach(rec => {
+      const marked = new Set((rec.horses || []).filter(h => h.mark).map(h => h.n));
+      const top3 = [rec.result.p1, rec.result.p2, rec.result.p3];
+      const got = top3.filter(v => marked.has(v)).length;
+      cover[got]++; coverHit += got;
+      if (trioHit(rec)) trioOK++;
+    });
+
+    // ---- 2. 物差しごと: 上位3頭で3着内を何頭拾えたか ----
+    // 頭数がレースごとに違っても、3着内は常に3頭。上位3頭で揃えれば比べられる。
+    const lensCover = computeLensCover(list);
+    const coverRows = LENS_DEF.map((L, li) => {
+      const v = lensCover[li];
+      if (!v.races || !v.picked) return null;
+      return { name: L[0], use: L[2], v, rate: v.got / v.picked, cover: v.got / (v.races * 3) };
+    }).filter(Boolean).sort((a, b) => b.rate - a.rate);
+    const coverTable = coverRows.map(x => {
+      const thin = x.v.races < 10 ? ' class="stat-n"' : '';
+      return `<tr><td>${x.name}<br>${USE_LABEL[x.use]}</td>
+        <td class="stat-n">${x.v.races}</td>
+        <td class="stat-n">${Math.round(x.v.picked / x.v.races * 10) / 10}</td>
+        <td${thin}><b>${pct(x.v.got, x.v.picked)}</b><br><span class="stat-n">${x.v.got}/${x.v.picked}</span></td>
+        <td class="stat-n">${pct(x.v.got, x.v.races * 3)}</td></tr>`;
+    }).join('');
+
+    // ---- 3. 物差し × 順位帯 ----
+    const BANDS = [['1位', r => r === 1], ['2-3位', r => r >= 2 && r <= 3],
+                   ['4-5位', r => r >= 4 && r <= 5], ['6位以下', r => r >= 6]];
+    const cross = LENS_DEF.map(() => BANDS.map(() => ({ n: 0, hit: 0 })));
+    const byMark = new Map(MARK_LIST.map(m => [m, { n: 0, hit: 0, win: 0 }]));
+    const noMark = { n: 0, hit: 0, win: 0 };
+    const flagBw = { n: 0, hit: 0, win: 0 };
+    const flagGr = { n: 0, hit: 0, win: 0 };
+    const flagPr = { n: 0, hit: 0, win: 0 };
+    list.forEach(rec => {
+      (rec.horses || []).forEach(h => {
+        const t = inTop3(rec, h.n) ? 1 : 0;
+        const w = (h.n === rec.result.p1) ? 1 : 0;
+        const tgt = h.mark ? byMark.get(h.mark) : noMark;
+        if (tgt) { tgt.n++; tgt.hit += t; tgt.win += w; }
+        LENS_DEF.forEach((L, li) => {
+          const r = L[1](h);
+          if (r === null || r === undefined || isNaN(r)) return;
+          BANDS.forEach((B, bi) => {
+            if (B[1](r)) { cross[li][bi].n++; cross[li][bi].hit += t; }
+          });
+        });
+        if (h.breakaway) { flagBw.n++; flagBw.hit += t; flagBw.win += w; }
+        if (h.grinder) { flagGr.n++; flagGr.hit += t; flagGr.win += w; }
+        if (h.promoted) { flagPr.n++; flagPr.hit += t; flagPr.win += w; }
+      });
+    });
+    const cell = (h, n) => n
+      ? `<td class="${n < 10 ? 'stat-n' : ''}"><b>${pct(h, n)}</b><br><span class="stat-n">${h}/${n}</span></td>`
+      : `<td class="stat-n">－</td>`;
+    const head = `<tr><th>区分</th><th>頭数</th><th>3着内</th><th>3着内率</th><th>1着</th></tr>`;
+    const markRows = MARK_LIST.map(m => {
+      const v = byMark.get(m);
+      return v.n ? statRow(m, v.hit, v.n, v.win) : '';
+    }).join('') + (noMark.n ? statRow('印なし', noMark.hit, noMark.n, noMark.win) : '');
+    const flagRows = [['抜け出し確保', flagBw], ['走り込み確保', flagGr], ['候補から繰上げ', flagPr]]
+      .map(([k, v]) => v.n ? statRow(k, v.hit, v.n, v.win) : '').join('');
+    const crossRows = LENS_DEF.map((L, li) => {
+      const tot = BANDS.reduce((a2, _, bi) => a2 + cross[li][bi].n, 0);
+      if (!tot) return '';
+      return `<tr><td>${L[0]}<br>${USE_LABEL[L[2]]}</td>` +
+        BANDS.map((_, bi) => cell(cross[li][bi].hit, cross[li][bi].n)).join('') + `</tr>`;
+    }).join('');
+
+    recStatsArea.innerHTML = filterHtml + renderPickupStats(list) + renderMissAnalysis(list) + renderRecByCondition(all) + `
+      <div class="rec-block">
+        <div class="rec-block-t">物差しごと：上位3頭を取ったときの精度</div>
+        <table class="stat-t">
+          <tr><th>物差し</th><th>レース</th><th>平均<br>頭数</th><th>選んだ馬の<br>3着内率</th><th>拾い</th></tr>
+          ${coverTable}
+        </table>
+        <p class="rec-note">同順位があるため、物差しによって選ぶ頭数が違います（平均頭数の列）。多く選べば拾えるのは当然なので、比較は<b>「選んだ馬の3着内率」</b>で行います。「拾い」は3着内3頭のうち何頭を拾えたかで、点数を増やせば上がる数字です。</p>
+      </div>
+      <div class="rec-block">
+        <div class="rec-block-t">いまの印で3着内を拾えたか（${list.length}レース）</div>
+        <table class="stat-t">
+          <tr><th>1レースで拾えた頭数</th><th>レース数</th><th>割合</th></tr>
+          <tr><td>3頭すべて</td><td>${cover[3]}</td><td><b>${pct(cover[3], list.length)}</b></td></tr>
+          <tr><td>2頭</td><td>${cover[2]}</td><td>${pct(cover[2], list.length)}</td></tr>
+          <tr><td>1頭</td><td>${cover[1]}</td><td>${pct(cover[1], list.length)}</td></tr>
+          <tr><td>0頭</td><td>${cover[0]}</td><td class="stat-thin">${pct(cover[0], list.length)}</td></tr>
+        </table>
+        <p class="rec-note">3着内の延べ${list.length * 3}頭のうち印が付いていたのは<b>${coverHit}頭（${pct(coverHit, list.length * 3)}）</b>。
+        推奨三連複の的中は<b>${trioOK}/${list.length}（${pct(trioOK, list.length)}）</b>。</p>
+      </div>
+      <div class="rec-block">
+        <div class="rec-block-t">印ごと</div>
+        <table class="stat-t">${head}${markRows}</table>
+      </div>
+      <div class="rec-block">
+        <div class="rec-block-t">物差しごとの順位帯 → 3着内率</div>
+        <table class="stat-t">
+          <tr><th>物差し</th>${BANDS.map(b => `<th>${b[0]}</th>`).join('')}</tr>
+          ${crossRows}
+        </table>
+      </div>
+      ${flagRows ? `<div class="rec-block">
+        <div class="rec-block-t">特別枠で取った馬</div>
+        <table class="stat-t">${head}${flagRows}</table>
+      </div>` : ''}
+      <p class="rec-note">母数が10に満たないものは薄く表示しています。その数字では判断できません。</p>`;
+  }
+
+  let logShown = 10;
+  function renderRecLog() {
+    const list = recLoad();
+    if (!list.length) { recLogArea.innerHTML = ''; return; }
+    const shown = list.filter(recMatch);
+    const sorted = shown.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id > a.id ? 1 : -1));
+    const rows = sorted.slice(0, logShown).map(rec => {
+      const ok = trioHit(rec);
+      const axisOK = rec.bet && inTop3(rec, rec.bet.axis);
+      const title = [rec.venue, rec.raceNo ? rec.raceNo + 'R' : '', rec.raceName]
+        .filter(Boolean).join(' ');
+      return `<div class="log-row">
+        <div class="log-main">
+          <div class="log-name">${escapeHtml(title)}</div>
+          <div class="log-sub">着順 ${rec.result.p1}-${rec.result.p2}-${rec.result.p3}　◎${rec.bet ? rec.bet.axis : '－'}</div>
+          <div class="log-sub">${rec.circuit === 'jra' ? '中央' : rec.circuit === 'nar' ? '地方' : ''}${rec.surface || ''}${rec.distance || ''}${rec.distance ? 'm' : ''}　${rec.headCount || '?'}頭　指数の幅${rec.spread === null || rec.spread === undefined ? '－' : rec.spread}</div>
+          ${rec.memo ? `<div class="log-memo">${escapeHtml(rec.memo)}</div>` : ''}
+        </div>
+        <span class="log-hit ${axisOK ? 'ok' : 'ng'}">◎${axisOK ? '的中' : '外'}</span>
+        <span class="log-hit ${ok ? 'ok' : 'ng'}">三連複${ok ? '的中' : '外'}</span>
+        ${rec.venue ? '' : `<input class="log-venue" data-venue="${rec.id}" placeholder="開催場を入れる">`}
+        <button class="log-del" data-del="${rec.id}">削除</button>
+      </div>`;
+    }).join('');
+    recLogArea.innerHTML = `<div class="rec-block">
+      <div class="rec-block-t">記録一覧（しぼり込み後 ${shown.length}件 / 全${list.length}件）</div>
+      ${rows}
+      ${sorted.length > logShown ? `<div class="btn-row"><button id="logMoreBtn">あと${sorted.length - logShown}件を表示</button></div>` : ''}
+      </div>`;
+  }
+
+  function renderRecForm() {
+    if (!lastResult || !currentBaseline) {
+      recFormArea.innerHTML = '';
+      return;
+    }
+    const m = lastResult.meta || {};
+    const title = [m.venue, m.raceNo ? m.raceNo + 'R' : '', m.raceName || m.raceClass || '']
+      .filter(Boolean).join(' ') || '（レース名なし）';
+    recFormArea.innerHTML = `<div class="rec-block rec-block-top">
+      <div class="rec-block-t">結果を記録</div>
+      <div class="rec-form">
+        <div class="rec-row"><label>レース</label><span>${escapeHtml(title)}</span></div>
+        <div class="rec-row"><label>開催場</label><input class="mid" id="recVenue" value="${escapeHtml(m.venue || '')}" placeholder="例：川崎">${m.venue ? '' : '<span class="rec-warn-inline">貼り付けから拾えませんでした</span>'}</div>
+        <div class="rec-row"><label>着順</label>
+          <input class="num" id="recP1" inputmode="numeric" placeholder="1着">
+          <input class="num" id="recP2" inputmode="numeric" placeholder="2着">
+          <input class="num" id="recP3" inputmode="numeric" placeholder="3着">
+        </div>
+        <div class="rec-row rec-row-col"><label>気づいたこと</label>
+          <textarea id="recMemo" placeholder="次はどうするか。あとで読み返す用（任意）"></textarea></div>
+        <div class="btn-row"><button class="primary" id="recSaveBtn">この結果を記録する</button></div>
+        <div class="rec-msg" id="recMsg"></div>
+      </div>
+      <p class="rec-note">記録されるのは、いま画面に出ている印と各馬の順位です。基準の会場・距離を変えると印も変わるので、記録する前に確認してください。</p>
+    </div>`;
+  }
+
+  function renderStorageInfo() {
+    const el = document.getElementById('recStorageInfo');
+    if (!el) return;
+    if (!packedAll.length) { el.textContent = ''; return; }
+    const byVenue = new Map();
+    packedAll.forEach(p => {
+      const k = p.ve || '（場なし）';
+      byVenue.set(k, (byVenue.get(k) || 0) + 1);
+    });
+    const parts = [...byVenue.entries()].sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k} ${n}件${venueLimit && n >= venueLimit ? '（上限）' : ''}`);
+    let bytes = 0;
+    try { bytes = new Blob([JSON.stringify(packedAll)]).size; } catch (e) { bytes = 0; }
+    el.textContent = parts.join(' / ') +
+      (bytes ? `　合計 ${(bytes / 1024 / 1024).toFixed(2)}MB` : '');
+  }
+
+  function renderRecCount() {
+    const el = document.getElementById('recCount');
+    const n = recLoad().length;
+    el.textContent = n ? `（${n}レース記録済み）` : '（記録なし）';
+  }
+  function renderRecAll() { renderRecForm(); renderRecStats(); renderRecLog(); renderRecCount(); renderStorageInfo(); renderSaveWarn(); }
+
+  recFormArea.addEventListener('click', (e) => {
+    if (e.target.id !== 'recSaveBtn') return;
+    const msg = document.getElementById('recMsg');
+    const num = id => {
+      const v = parseInt((document.getElementById(id).value || '').trim(), 10);
+      return isNaN(v) ? null : v;
+    };
+    const p1 = num('recP1'), p2 = num('recP2'), p3 = num('recP3');
+    if (!p1 || !p2 || !p3) { msg.textContent = '1〜3着の馬番を入れてください。'; msg.className = 'rec-msg is-err'; return; }
+    if (p1 === p2 || p2 === p3 || p1 === p3) { msg.textContent = '同じ馬番が入っています。'; msg.className = 'rec-msg is-err'; return; }
+    const t = new Date();
+    const dateStr = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    const memo = (document.getElementById('recMemo').value || '').trim();
+    const venueIn = (document.getElementById('recVenue').value || '').trim();
+    const rec = buildRecord({ p1, p2, p3 }, dateStr, memo, venueIn);
+    if (!rec) { msg.textContent = '印が作れなかったため記録できません。'; msg.className = 'rec-msg is-err'; return; }
+    msg.textContent = '記録しました。';
+    msg.className = 'rec-msg';
+    recAdd(rec).then(ok => {
+      if (!ok) { msg.textContent = '保存できませんでした。'; msg.className = 'rec-msg is-err'; }
+      renderRecStats(); renderRecLog(); renderRecCount();
+      if (autoSave) saveToFile(true);
+      renderSaveWarn();
+    });
+  });
+
+  recStatsArea.addEventListener('change', (e) => {
+    const miss = e.target.getAttribute && e.target.getAttribute('data-miss');
+    if (miss === 'group') { missGroup = e.target.value; renderRecStats(); return; }
+    if (miss === 'th') { missThreshold = parseInt(e.target.value, 10); renderRecStats(); return; }
+    if (e.target.getAttribute && e.target.getAttribute('data-axis')) {
+      recAxis = e.target.value;
+      renderRecStats();
+      return;
+    }
+    const key = e.target.getAttribute && e.target.getAttribute('data-f');
+    if (!key) return;
+    recFilter[key] = e.target.value;
+    renderRecStats(); renderRecLog(); renderRecCount();
+  });
+
+  recLogArea.addEventListener('change', (e) => {
+    const id = e.target.getAttribute && e.target.getAttribute('data-venue');
+    if (!id) return;
+    const v = (e.target.value || '').trim();
+    if (!v) return;
+    recUpdate(id, pk => { pk.ve = v; }).then(() => {
+      renderRecStats(); renderRecLog(); renderRecCount();
+    });
+  });
+
+  recLogArea.addEventListener('click', (e) => {
+    if (e.target.id === 'logMoreBtn') { logShown += 20; renderRecLog(); return; }
+    const id = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (!id) return;
+    recRemove(id).then(ok => {
+      renderRecStats(); renderRecLog(); renderRecCount();
+      if (!ok) {
+        recBackupMsg.textContent = '削除できませんでした。';
+        recBackupMsg.className = 'rec-msg is-err';
+      }
+    });
+  });
+
+  const autoSaveChk = document.getElementById('autoSaveChk');
+  autoSaveChk.checked = autoSave;
+  autoSaveChk.addEventListener('change', () => {
+    autoSave = autoSaveChk.checked;
+    try { localStorage.setItem(AUTOSAVE_KEY, autoSave ? '1' : '0'); } catch (e) {}
+  });
+
+  document.getElementById('recDiagBtn').addEventListener('click', () => {
+    const el = document.getElementById('recDiagArea');
+    el.textContent = '調べています…';
+    diagnose().then(lines => { el.innerHTML = lines.map(x => escapeHtml(x)).join('<br>'); });
+  });
+
+  const recLimitInput = document.getElementById('recLimit');
+  recLimitInput.value = String(venueLimit);
+  recLimitInput.addEventListener('change', () => {
+    const msg = document.getElementById('recLimitMsg');
+    const n = parseInt(recLimitInput.value, 10);
+    if (isNaN(n) || n < 0) {
+      msg.textContent = '0以上の数を入れてください。'; msg.className = 'rec-msg is-err';
+      recLimitInput.value = String(venueLimit); return;
+    }
+    setVenueLimit(n);
+    trimOverflow().then(k => {
+      msg.textContent = (n ? `1開催場あたり${n}件までにしました。` : '無制限にしました。') +
+        (k ? `古い${k}件を削除しました。` : '');
+      msg.className = 'rec-msg';
+      renderRecAll();
+    });
+  });
+
+  document.getElementById('recExportBtn').addEventListener('click', () => {
+    if (!packedAll.length) { recBackupMsg.textContent = '書き出す記録がありません。'; recBackupMsg.className = 'rec-msg is-err'; return; }
+    navigator.clipboard.writeText(JSON.stringify(packedAll)).then(() => {
+      recBackupMsg.textContent = `${packedAll.length}件をコピーしました。メモなどに貼り付けて保存してください。`;
+      recBackupMsg.className = 'rec-msg';
+    }).catch(() => {
+      recBackupMsg.textContent = 'コピーに失敗しました。';
+      recBackupMsg.className = 'rec-msg is-err';
+    });
+  });
+
+  document.getElementById('recImportBtn').addEventListener('click', () => {
+    const box = document.getElementById('recImportBox');
+    const txt = (box.value || '').trim();
+    if (!txt) {
+      recBackupMsg.textContent = '上の欄に、書き出した記録を貼り付けてください。';
+      recBackupMsg.className = 'rec-msg is-err'; return;
+    }
+    let add;
+    try { add = JSON.parse(txt); } catch (e) { add = null; }
+    if (!Array.isArray(add)) {
+      recBackupMsg.textContent = '読み込めませんでした。書き出した内容をそのまま貼り付けてください。';
+      recBackupMsg.className = 'rec-msg is-err'; return;
+    }
+    importRecords(add).then(n => {
+      if (n < 0) {
+        recBackupMsg.textContent = '保存できませんでした。';
+        recBackupMsg.className = 'rec-msg is-err'; return;
+      }
+      box.value = '';
+      recBackupMsg.textContent = n + '件を追加しました。';
+      recBackupMsg.className = 'rec-msg';
+      renderRecStats(); renderRecLog(); renderRecCount();
+    });
+  });
+
+  // 記録をファイルに書き出す。アプリを閉じると端末側の保存領域は消えるため、
+  // これが唯一確実に残る手段。記録するたびに自動で呼ぶ。
+  let savedCount = -1;
+  function saveToFile(auto) {
+    if (!packedAll.length) {
+      if (!auto) { recBackupMsg.textContent = '保存する記録がありません。'; recBackupMsg.className = 'rec-msg is-err'; }
+      return false;
+    }
+    try {
+      const blob = new Blob([JSON.stringify(packedAll)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const t = new Date();
+      const d = t.getFullYear() + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0');
+      a.href = url;
+      a.download = 'race-record-' + d + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      savedCount = packedAll.length;
+      recBackupMsg.textContent = packedAll.length + '件をファイルに書き出しました。';
+      recBackupMsg.className = 'rec-msg';
+      renderSaveWarn();
+      return true;
+    } catch (e) {
+      recBackupMsg.textContent = 'ファイルに保存できませんでした。「文字でコピー」をお使いください。';
+      recBackupMsg.className = 'rec-msg is-err';
+      return false;
+    }
+  }
+  document.getElementById('recFileSaveBtn').addEventListener('click', () => saveToFile(false));
+
+  // 未保存の記録があるかを常に画面上部に出す
+  function renderSaveWarn() {
+    const el = document.getElementById('saveWarn');
+    if (!el) return;
+    const n = packedAll.length;
+    if (!n) { el.innerHTML = ''; return; }
+    if (savedCount === n) {
+      el.innerHTML = `<div class="save-ok">${n}件を書き出し済みです。</div>`;
+      return;
+    }
+    const un = savedCount < 0 ? n : n - savedCount;
+    el.innerHTML = `<div class="save-warn">
+      <b>${un}件がバックアップ未取得です。</b>
+      <button id="saveNowBtn">ファイルに書き出す</button>
+    </div>`;
+  }
+  document.getElementById('saveWarn').addEventListener('click', (e) => {
+    if (e.target.id === 'saveNowBtn') saveToFile(false);
+  });
+
+  const recFileInput = document.getElementById('recFileInput');
+  document.getElementById('recFileLoadBtn').addEventListener('click', () => {
+    recFileInput.value = '';
+    recFileInput.click();
+  });
+  recFileInput.addEventListener('change', () => {
+    const f = recFileInput.files && recFileInput.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let add;
+      try { add = JSON.parse(reader.result); } catch (e) { add = null; }
+      if (!Array.isArray(add)) {
+        recBackupMsg.textContent = 'そのファイルは読み込めませんでした。';
+        recBackupMsg.className = 'rec-msg is-err'; return;
+      }
+      importRecords(add).then(n => {
+        if (n < 0) {
+          recBackupMsg.textContent = '読み込んだ記録を保存できませんでした。';
+          recBackupMsg.className = 'rec-msg is-err'; return;
+        }
+        recBackupMsg.textContent = n + '件を追加しました（全' + packedAll.length + '件）。';
+        recBackupMsg.className = 'rec-msg';
+        savedCount = packedAll.length;
+        renderRecStats(); renderRecLog(); renderRecCount(); renderSaveWarn();
+      });
+    };
+    reader.onerror = () => {
+      recBackupMsg.textContent = 'ファイルを読めませんでした。';
+      recBackupMsg.className = 'rec-msg is-err';
+    };
+    reader.readAsText(f);
+  });
+
+  document.getElementById('recStatsCopyBtn').addEventListener('click', () => {
+    const msg = document.getElementById('recStatsCopyMsg');
+    const txt = recStatsArea.innerText || recStatsArea.textContent || '';
+    if (!txt.trim()) { msg.textContent = 'コピーするものがありません。'; msg.className = 'rec-msg is-err'; return; }
+    navigator.clipboard.writeText(txt).then(() => {
+      msg.textContent = 'コピーしました。';
+      msg.className = 'rec-msg';
+    }).catch(() => {
+      msg.textContent = 'コピーに失敗しました。';
+      msg.className = 'rec-msg is-err';
+    });
+  });
+
+  let clearArmed = false;
+  let clearTimer = null;
+  const clearBtnEl = document.getElementById('recClearBtn');
+  clearBtnEl.addEventListener('click', () => {
+    // confirm() が使えない環境があるため、2回押しで確定させる
+    if (!clearArmed) {
+      clearArmed = true;
+      clearBtnEl.textContent = 'もう一度押すと全部消えます';
+      recBackupMsg.textContent = '取り消す場合は、このまま何も押さないでください。';
+      recBackupMsg.className = 'rec-msg is-err';
+      clearTimer = setTimeout(() => {
+        clearArmed = false;
+        clearBtnEl.textContent = '全記録を削除';
+        recBackupMsg.textContent = '';
+      }, 6000);
+      return;
+    }
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    clearBtnEl.textContent = '全記録を削除';
+    recClearAll().then(ok => {
+      renderRecStats(); renderRecLog(); renderRecCount();
+      recBackupMsg.textContent = ok ? '全記録を削除しました。' : '削除できませんでした。';
+      recBackupMsg.className = ok ? 'rec-msg' : 'rec-msg is-err';
+    });
+  });
+
+  // 保存層の準備ができてから描画する
+  renderRecAll();
+  initStore().then(() => {
+    renderRecAll();
+    const sm = document.getElementById('recStorageMsg');
+    if (!storeReady) {
+      sm.textContent = 'このブラウザでは記録の保存領域が使えません（' + escapeHtml(storeError) + '）。記録できない状態です。';
+      sm.className = 'rec-msg is-err';
+      return;
+    }
+    sm.textContent = loadReport || '';
+    sm.className = 'rec-note';
+    // 重複と上限超過を自動で消す
+    trimDuplicates().then(d =>
+      trimOverflow().then(k => {
+        if (!d && !k) return;
+        const lm = document.getElementById('recLimitMsg');
+        lm.textContent = [
+          d ? `重複していた${d}件を削除しました。` : '',
+          k ? `上限を超えていた${k}件を、古いものから削除しました。` : '',
+        ].filter(Boolean).join(' ');
+        lm.className = 'rec-msg';
+        renderRecAll();
+      }));
+  });
+
+})();
+</script>
+</body>
+</html>
